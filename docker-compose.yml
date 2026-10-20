@@ -1,0 +1,100 @@
+# Stonepedia all-in-one stack. Start: `docker compose up -d`. Ports are set in .env.
+name: stonepedia
+
+x-temporal-db: &temporal-db
+  DB: postgres12
+  DB_PORT: "5432"
+  POSTGRES_USER: temporal
+  POSTGRES_PWD: temporal
+  POSTGRES_SEEDS: postgres
+
+x-app: &app
+  image: stonepedia:${STONEPEDIA_VERSION:-latest}
+  restart: unless-stopped
+  environment:
+    STONEPEDIA_TEMPORAL_ADDRESS: temporal:7233
+    STONEPEDIA_TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-http://localhost:8233}
+  volumes:
+    - data:/data
+  depends_on:
+    temporal-init:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  temporal-schema:
+    image: temporalio/admin-tools:1.31.0
+    environment:
+      <<: *temporal-db
+      SQL_PASSWORD: temporal
+    entrypoint: ["/bin/sh", "/deploy/setup-schema.sh"]
+    volumes:
+      - ./deploy/temporal:/deploy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal:
+    image: temporalio/server:1.31.0
+    restart: unless-stopped
+    environment:
+      <<: *temporal-db
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/dynamicconfig.yaml
+    volumes:
+      - ./deploy/temporal/dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/dynamicconfig.yaml:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    depends_on:
+      temporal-schema:
+        condition: service_completed_successfully
+
+  temporal-init:
+    image: temporalio/admin-tools:1.31.0
+    entrypoint: ["/bin/sh", "/deploy/init.sh"]
+    volumes:
+      - ./deploy/temporal:/deploy:ro
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.49.1
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "${TEMPORAL_UI_PORT:-8233}:8080"
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    build: .
+    command: ["python", "-m", "stonepedia.worker"]
+
+  web:
+    <<: *app
+    ports:
+      - "${STONEPEDIA_PORT:-8080}:8000"
+
+volumes:
+  pgdata:
+  data:
