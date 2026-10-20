@@ -3,7 +3,7 @@ import asyncio
 from temporalio.common import SearchAttributePair, TypedSearchAttributes
 
 from stonepedia import config, search
-from stonepedia.models import BundleRun, BundleSpec, ProposalInput
+from stonepedia.models import BundleRun, BundleSpec, ProposalInput, SourceInput
 from stonepedia.workflows import BundleWorkflow, ProposalWorkflow
 
 
@@ -15,8 +15,15 @@ async def start_bundle(env, slug):
     return handle
 
 
-async def start_proposal(env, bundle, pid, title="Boot sequence", text="Board boots from LU 1."):
-    inp = ProposalInput(proposal_id=pid, bundle=bundle, title=title, text=text, submitted_by="kim")
+async def start_proposal(env, bundle, pid, title="Boot sequence", text="Board boots from LU 1.", source=None, targets=()):
+    inp = ProposalInput(
+        proposal_id=pid,
+        bundle=bundle,
+        title=title,
+        source=source or SourceInput(kind="text", text=text),
+        submitted_by="kim",
+        targets=list(targets),
+    )
     return await env.client.start_workflow(
         ProposalWorkflow.run,
         inp,

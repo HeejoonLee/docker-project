@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 ChangeKind = Literal["create", "update", "retire"]
+SourceKind = Literal["text", "file", "link", "request"]
 Decision = Literal["pending", "accepted", "discarded"]
 ProposalState = Literal["generating", "awaiting_review", "committing", "done", "discarded", "failed"]
 
@@ -24,6 +25,34 @@ class BundleSpec(BaseModel):
         if not SLUG_RE.match(v):
             raise ValueError("slug must be lowercase letters, digits and dashes")
         return v
+
+
+class SourceInput(BaseModel):
+    """What the submitter gave us. Files are staged under <data>/uploads/<proposal id>/ by the web app."""
+
+    kind: SourceKind
+    text: str = ""  # text and request
+    url: str = ""  # link
+    filename: str = ""  # file: the uploaded file's original name
+
+
+class SourceInfo(BaseModel):
+    """A prepared Source folder (see stonepedia.sources)."""
+
+    id: str
+    kind: SourceKind
+    title: str
+    original: str  # file name of the original inside the folder
+    filename: str = ""
+    url: str = ""
+    media: str = ""
+    pages: int | None = None
+    text_chars: int = 0
+    submitted_by: str = ""
+    submitted_at: str = ""
+    sha256: str = ""
+    warnings: list[str] = []
+    preview: str = ""  # start of the extracted text, for the review screen
 
 
 class BundleRun(BaseModel):
@@ -65,8 +94,9 @@ class AgentJob(BaseModel):
     bundle: str
     mode: AgentMode
     title: str
-    text: str
+    source: SourceInfo
     submitted_by: str
+    request_targets: list[str] = []  # Articles a Request is aimed at
     feedback: str = ""
     feedback_by: str = ""
     # Current content of this Proposal's non-discarded changes, placed into the workspace first.
@@ -95,16 +125,19 @@ class ProposalInput(BaseModel):
     proposal_id: str
     bundle: str
     title: str
-    text: str
+    source: SourceInput
     submitted_by: str
+    targets: list[str] = []  # Requests: Articles the Request is aimed at
 
 
 class ProposalView(BaseModel):
     id: str
     bundle: str
     title: str
-    text: str
     submitted_by: str
+    source_kind: SourceKind
+    source: SourceInfo | None = None
+    targets: list[str] = []
     state: ProposalState
     changes: list[ArticleChange] = []
     error: str | None = None
@@ -119,6 +152,7 @@ class CommitRequest(BaseModel):
     proposal_id: str
     title: str
     reviewer: str
+    source_id: str | None = None
     changes: list[ArticleChange]  # accepted changes only
 
 

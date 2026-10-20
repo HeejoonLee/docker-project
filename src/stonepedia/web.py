@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -20,7 +20,8 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError
 
 from stonepedia import appconfig, config, frontmatter, git, search
-from stonepedia.models import AgentCheck, BundleRun, BundleSpec, ProposalInput, ProposalView
+from stonepedia.models import AgentCheck, BundleRun, BundleSpec, ProposalInput, ProposalView, SourceInput
+from stonepedia.sources import SUPPORTED_EXTS
 from stonepedia.temporal import connect
 from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, ProposalWorkflow
 
@@ -164,13 +165,6 @@ class ProposalSummary(BaseModel):
     created_at: str | None
 
 
-class NewProposal(BaseModel):
-    bundle: str
-    title: str
-    text: str
-    submitted_by: str
-
-
 class DecisionBody(BaseModel):
     decision: Literal["pending", "accepted", "discarded"]
 
@@ -223,25 +217,54 @@ async def list_proposals(request: Request, bundle: str | None = None, state: str
 
 
 @app.post("/api/proposals", status_code=201)
-async def create_proposal(body: NewProposal, request: Request) -> ProposalSummary:
-    if not body.title.strip() or not body.text.strip():
-        raise HTTPException(422, "Title and text are required.")
-    if not (_settings(request).bundles_dir / body.bundle / ".git").exists():
+async def create_proposal(
+    request: Request,
+    bundle: str = Form(...),
+    kind: Literal["text", "file", "link", "request"] = Form(...),
+    submitted_by: str = Form(""),
+    title: str = Form(""),
+    text: str = Form(""),
+    url: str = Form(""),
+    targets: str = Form(""),  # Requests: newline-separated Article paths
+    file: UploadFile | None = File(None),
+) -> ProposalSummary:
+    settings = _settings(request)
+    if not (settings.bundles_dir / bundle / ".git").exists():
         raise HTTPException(404, "No such Bundle.")
+    title = title.strip()
+    if kind in ("text", "request") and not text.strip():
+        raise HTTPException(422, "Text is required.")
+    if kind == "link" and not url.strip().startswith(("http://", "https://")):
+        raise HTTPException(422, "Enter a link starting with http:// or https://")
+    if kind == "file" and (file is None or not file.filename):
+        raise HTTPException(422, "Choose a file.")
     proposal_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+
+    filename = ""
+    if kind == "file":
+        assert file is not None and file.filename
+        filename = Path(file.filename).name
+        if Path(filename).suffix.lower() not in SUPPORTED_EXTS:
+            raise HTTPException(422, f"Unsupported file type. Supported: {', '.join(sorted(SUPPORTED_EXTS))}")
+        await _save_upload(file, settings.uploads_dir / proposal_id / filename,
+                           appconfig.load(settings.config_dir).max_source_mb * 2**20)
+
+    first_line = text.strip().splitlines()[0][:80] if text.strip() else ""
+    fallback = filename or url.strip() or first_line
     inp = ProposalInput(
         proposal_id=proposal_id,
-        bundle=body.bundle,
-        title=body.title.strip(),
-        text=body.text,
-        submitted_by=body.submitted_by.strip() or "anonymous",
+        bundle=bundle,
+        title=title or fallback or proposal_id,
+        source=SourceInput(kind=kind, text=text, url=url.strip(), filename=filename),
+        submitted_by=submitted_by.strip() or "anonymous",
+        targets=[t.strip() for t in targets.splitlines() if t.strip()] if kind == "request" else [],
     )
     await _client(request).start_workflow(
         ProposalWorkflow.run,
         inp,
         id=f"proposal-{proposal_id}",
         task_queue=config.TASK_QUEUE,
-        memo={"title": inp.title, "submitted_by": inp.submitted_by},
+        memo={"title": inp.title, "submitted_by": inp.submitted_by, "kind": kind},
         search_attributes=TypedSearchAttributes(
             [SearchAttributePair(search.BUNDLE, inp.bundle), SearchAttributePair(search.PROPOSAL_STATE, "generating")]
         ),
@@ -254,6 +277,29 @@ async def create_proposal(body: NewProposal, request: Request) -> ProposalSummar
         state="generating",
         created_at=_ts(datetime.now(UTC)),
     )
+
+
+async def _save_upload(file: UploadFile, dest: Path, max_bytes: int) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    size = 0
+    with dest.open("wb") as out:
+        while chunk := await file.read(1 << 20):
+            size += len(chunk)
+            if size > max_bytes:
+                out.close()
+                dest.unlink(missing_ok=True)
+                raise HTTPException(413, f"The file is larger than {max_bytes // 2**20} MB (change the limit in Settings).")
+            out.write(chunk)
+
+
+@app.get("/api/proposals/{proposal_id}/source/{name}")
+async def get_source_file(proposal_id: str, name: str, request: Request) -> FileResponse:
+    folder = (_settings(request).sources_dir / proposal_id).resolve()
+    target = (folder / name).resolve()
+    if not target.is_relative_to(folder) or not target.is_file():
+        raise HTTPException(404, "No such Source file.")
+    media = "text/plain; charset=utf-8" if target.suffix in (".md", ".yaml", ".txt", ".html") else None
+    return FileResponse(target, media_type=media, content_disposition_type="inline")
 
 
 @app.get("/api/proposals/{proposal_id}")

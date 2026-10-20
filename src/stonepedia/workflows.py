@@ -92,8 +92,9 @@ class ProposalWorkflow:
             id=inp.proposal_id,
             bundle=inp.bundle,
             title=inp.title,
-            text=inp.text,
             submitted_by=inp.submitted_by,
+            source_kind=inp.source.kind,
+            targets=inp.targets,
             state="generating",
         )
         self._submitted_by: str | None = None
@@ -101,6 +102,14 @@ class ProposalWorkflow:
 
     @workflow.run
     async def run(self, inp: ProposalInput) -> ProposalView:
+        try:
+            self._view.source = await workflow.execute_activity_method(
+                Activities.prepare_source, inp, start_to_close_timeout=timedelta(minutes=10), retry_policy=_RETRY
+            )
+        except ActivityError as err:
+            self._view.error = f"Could not read the Source: {_cause(err)}"
+            self._set_state("failed")
+            return self._view
         await self._run_agent(self._job("propose"))
         if not self._view.changes:
             self._set_state("failed")
@@ -126,8 +135,9 @@ class ProposalWorkflow:
             bundle=self._inp.bundle,
             mode=mode,
             title=self._inp.title,
-            text=self._inp.text,
+            source=self._view.source,
             submitted_by=self._inp.submitted_by,
+            request_targets=self._inp.targets,
             feedback=feedback,
             targets=targets or [],
         )
@@ -217,7 +227,11 @@ class ProposalWorkflow:
                 args=[
                     self._view.bundle,
                     CommitRequest(
-                        proposal_id=self._view.id, title=self._view.title, reviewer=reviewer, changes=accepted
+                        proposal_id=self._view.id,
+                        title=self._view.title,
+                        reviewer=reviewer,
+                        changes=accepted,
+                        source_id=self._view.source.id if self._view.source else None,
                     ),
                 ],
                 start_to_close_timeout=_SHORT,

@@ -23,6 +23,15 @@ class Settings:
         return self.data_dir / "scratch"
 
     @property
+    def uploads_dir(self) -> Path:
+        return self.data_dir / "uploads"
+
+    @property
+    def sources_dir(self) -> Path:
+        """Prepared Sources, staged here until committed into a Bundle."""
+        return self.data_dir / "sources"
+
+    @property
     def config_dir(self) -> Path:
         return self.data_dir / "config"
 

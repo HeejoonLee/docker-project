@@ -17,6 +17,8 @@ AgentKind = Literal["claude-cli", "fake"]
 class AppConfig(BaseModel):
     agent: AgentKind = "claude-cli"
     agent_timeout_minutes: int = Field(default=60, ge=1, le=600)
+    max_source_mb: int = Field(default=50, ge=1, le=2000)
+    verify_link_certificates: bool = False  # intranet sites often use private CAs
 
 
 def _app_path(config_dir: Path) -> Path:

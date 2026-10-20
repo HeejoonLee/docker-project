@@ -48,10 +48,7 @@ export default function ProposalPage() {
         {temporalLink && <a className="small" href={temporalLink} target="_blank" rel="noreferrer">{t('proposal.openTemporal')} ↗</a>}
       </div>
 
-      <details className="source">
-        <summary>{t('proposal.source')}</summary>
-        <pre>{p.text}</pre>
-      </details>
+      <SourceCard p={p} />
 
       {p.state === 'generating' && <p className="notice working">{t('proposal.generating')}</p>}
       {p.state === 'committing' && <p className="notice working">{t('proposal.committing')}</p>}
@@ -107,6 +104,33 @@ export default function ProposalPage() {
         </div>
       )}
     </section>
+  )
+}
+
+function SourceCard({ p }: { p: Proposal }) {
+  const { t } = useI18n()
+  const src = p.source
+  if (!src) return null
+  return (
+    <details className="source">
+      <summary>
+        {t('proposal.source')}: {t(`proposal.sourceKind.${src.kind}`)} · {src.filename || src.url || src.title}
+        {src.pages ? ` · ${t('proposal.sourcePages', { count: String(src.pages) })}` : ''}
+      </summary>
+      {p.targets.length > 0 && <p className="muted">{t('proposal.targets')}: {p.targets.map((x) => <code key={x} className="path"> {x}</code>)}</p>}
+      {src.warnings.map((w, i) => <p key={i} className="notice">{w}</p>)}
+      <p className="small">
+        <a href={api.sourceUrl(p.id, src.original)} target="_blank" rel="noreferrer">{t('proposal.sourceOriginal')} ↗</a>
+        {' · '}
+        <a href={api.sourceUrl(p.id, 'text.md')} target="_blank" rel="noreferrer">{t('proposal.sourceText')} ↗</a>
+        {src.url && <>{' · '}<a href={src.url} target="_blank" rel="noreferrer">{src.url}</a></>}
+      </p>
+      {src.media === 'image' ? (
+        <img className="source-image" src={api.sourceUrl(p.id, src.original)} alt={src.filename} />
+      ) : (
+        <pre>{src.preview}{src.text_chars > src.preview.length ? '\n…' : ''}</pre>
+      )}
+    </details>
   )
 }
 

@@ -30,10 +30,11 @@ def update(text: str, **fields) -> str:
 SYSTEM_FIELDS = ("status", "sources", "generated", "review")
 
 
-def finalize(content: str, base_content: str | None, generated: dict) -> str:
+def finalize(content: str, base_content: str | None, generated: dict, source_entry: dict | None = None) -> str:
     """Make an agent-written Article safe to propose.
 
-    System fields are removed and rewritten (`status: proposed`, `generated`); frontmatter fields
+    System fields are removed and rewritten (`status: proposed`, `generated`, `sources` = the
+    previous version's sources plus this Proposal's Source); frontmatter fields
     present in the base version but dropped by the agent are restored, so unknown fields survive.
     """
     meta, body = split(content)
@@ -43,8 +44,11 @@ def finalize(content: str, base_content: str | None, generated: dict) -> str:
             meta[key] = value
     for key in SYSTEM_FIELDS:
         meta.pop(key, None)
-    if "sources" in base_meta:
-        meta["sources"] = base_meta["sources"]
+    sources = list(base_meta.get("sources") or [])
+    if source_entry and not any(isinstance(s, dict) and s.get("id") == source_entry["id"] for s in sources):
+        sources.append(source_entry)
+    if sources:
+        meta["sources"] = sources
     meta["status"] = "proposed"
     meta["generated"] = generated
     return join(meta, body if body.startswith("\n") else "\n" + body)

@@ -60,6 +60,22 @@ export default function SettingsPage() {
           />
         </label>
         <label>
+          {t('settings.maxSource')}
+          <input
+            type="number" min={1} max={2000}
+            value={settings.app.max_source_mb}
+            onChange={(e) => update({ max_source_mb: Number(e.target.value) })}
+          />
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={settings.app.verify_link_certificates}
+            onChange={(e) => update({ verify_link_certificates: e.target.checked })}
+          />
+          <span>{t('settings.verifyCerts')}</span>
+        </label>
+        <label>
           {t('settings.claude')}
           <span className="hint">{t('settings.claudeHint')}</span>
           <textarea

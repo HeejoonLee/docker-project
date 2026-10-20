@@ -15,12 +15,30 @@ export interface ArticleChange {
   history: { content: string; replaced_by: 'revise' | 'edit' | 'feedback'; note: string; by: string; at: string }[]
 }
 
+export type SourceKind = 'text' | 'file' | 'link' | 'request'
+
+export interface SourceInfo {
+  id: string
+  kind: SourceKind
+  title: string
+  original: string
+  filename: string
+  url: string
+  media: string
+  pages: number | null
+  text_chars: number
+  warnings: string[]
+  preview: string
+}
+
 export interface Proposal {
   id: string
   bundle: string
   title: string
-  text: string
   submitted_by: string
+  source_kind: SourceKind
+  source: SourceInfo | null
+  targets: string[]
   state: ProposalState
   changes: ArticleChange[]
   error: string | null
@@ -45,16 +63,22 @@ export interface ArticleSummary { path: string; title: string; type: string; sta
 export interface BundleDetail extends BundleSummary { head: string | null; articles: ArticleSummary[] }
 export interface AppConfig { temporal_ui_url: string; namespace: string }
 export interface Settings {
-  app: { agent: 'claude-cli' | 'fake'; agent_timeout_minutes: number }
+  app: {
+    agent: 'claude-cli' | 'fake'
+    agent_timeout_minutes: number
+    max_source_mb: number
+    verify_link_certificates: boolean
+  }
   claude_settings: string
 }
 export interface AgentCheck { ok: boolean; message: string; agent: string; seconds: number }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const isForm = body instanceof FormData
   const res = await fetch(url, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   })
   if (!res.ok) {
     let detail = res.statusText
@@ -80,8 +104,19 @@ export const api = {
     return request<ProposalSummary[]>('GET', `/api/proposals?${q}`)
   },
   proposal: (id: string) => request<Proposal>('GET', `/api/proposals/${id}`),
-  createProposal: (p: { bundle: string; title: string; text: string; submitted_by: string }) =>
-    request<ProposalSummary>('POST', '/api/proposals', p),
+  createProposal: (p: {
+    bundle: string; kind: SourceKind; title: string; submitted_by: string
+    text?: string; url?: string; file?: File; targets?: string[]
+  }) => {
+    const form = new FormData()
+    for (const [k, v] of Object.entries(p)) {
+      if (v === undefined) continue
+      if (k === 'targets') form.append(k, (v as string[]).join('\n'))
+      else form.append(k, v as string | File)
+    }
+    return request<ProposalSummary>('POST', '/api/proposals', form)
+  },
+  sourceUrl: (id: string, name: string) => `/api/proposals/${id}/source/${encodeURIComponent(name)}`,
   decide: (id: string, changeId: string, decision: Decision) =>
     request<Proposal>('POST', `/api/proposals/${id}/changes/${changeId}/decision`, { decision }),
   revise: (id: string, changeId: string, feedback: string, reviewer: string) =>

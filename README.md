@@ -5,7 +5,7 @@ Submit a Source → an agent proposes Article changes → a human accepts, revis
 
 Vocabulary: [CONTEXT.md](CONTEXT.md) · Decisions: [docs/adr](docs/adr) · Plan: [docs/plan.md](docs/plan.md)
 
-> Status: phase 2 of 6. Proposals are written by Claude Code from pasted text. PDF/link/image Sources, Templates, remotes and maintenance come in later phases ([plan](docs/plan.md)).
+> Status: phase 3 of 6. Proposals are written by Claude Code from pasted text, files (PDF, Word, PowerPoint, Excel, HTML, images), intranet links and Requests. Templates, git remotes and maintenance come in later phases ([plan](docs/plan.md)).
 
 ## Run it
 

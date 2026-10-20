@@ -56,7 +56,8 @@ async def test_claude_run_becomes_article_changes(env, worker, settings, stub_cl
     assert "--restricted" in args and args[args.index("--tools") + 1] == "Read,Glob,Grep,Write,Edit"
     assert args[args.index("--settings") + 1] == str(settings.config_dir / "claude-settings.json")
     assert "Boot from LU 1." not in call["prompt"]  # material is passed as a file, not inline
-    assert ".stonepedia/task/source.md" in call["prompt"] and "Korean" in call["prompt"]
+    assert f"sources/c{uid}/text.md" in call["prompt"] and "Korean" in call["prompt"]
+    assert f"resource: ../sources/c{uid}/text.md" in change.content  # cited, relative to guides/
 
 
 async def test_claude_failure_is_reported(env, worker, stub_claude, monkeypatch, uid):

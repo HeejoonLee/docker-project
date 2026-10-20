@@ -162,3 +162,12 @@ tr.selected td { background: var(--bg); }
 .feedback { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .feedback label { display: flex; flex-direction: column; gap: 4px; }
 .field-error { color: var(--bad); font-weight: 400; font-size: 0.85rem; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; align-self: flex-start; }
+.segmented button { border: none; border-radius: 0; border-right: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+.segmented button:last-child { border-right: none; }
+.segmented button.active { background: var(--accent); color: var(--accent-text); }
+.form label.check, .targets label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
+.targets { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow: auto; background: var(--surface); }
+.targets legend { font-weight: 600; padding: 0 4px; }
+.source-image { max-width: 100%; max-height: 480px; border: 1px solid var(--border); border-radius: var(--radius); }
+.source summary { overflow-wrap: anywhere; }
