@@ -10,7 +10,7 @@ from temporalio.worker import Worker
 from stonepedia import config
 from stonepedia.activities import Activities
 from stonepedia.temporal import connect
-from stonepedia.workflows import BundleWorkflow, ProposalWorkflow
+from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, ProposalWorkflow
 
 
 def build_worker(client: Client, settings: config.Settings, executor: ThreadPoolExecutor) -> Worker:
@@ -19,7 +19,7 @@ def build_worker(client: Client, settings: config.Settings, executor: ThreadPool
     return Worker(
         client,
         task_queue=config.TASK_QUEUE,
-        workflows=[BundleWorkflow, ProposalWorkflow],
+        workflows=[AgentCheckWorkflow, BundleWorkflow, ProposalWorkflow],
         activities=Activities(settings, client).all(),
         activity_executor=executor,
     )

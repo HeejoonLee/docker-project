@@ -31,6 +31,16 @@ class BundleRun(BaseModel):
     initialized: bool = False
 
 
+class ChangeVersion(BaseModel):
+    """An earlier version of an Article change, kept when it is revised or edited."""
+
+    content: str
+    replaced_by: Literal["revise", "edit", "feedback"]
+    note: str = ""  # reviewer feedback that led to the replacement
+    by: str = ""
+    at: str = ""
+
+
 class ArticleChange(BaseModel):
     id: str
     path: str
@@ -41,14 +51,44 @@ class ArticleChange(BaseModel):
     title: str = ""
     decision: Decision = "pending"
     stale: bool = False
+    edited_by: str | None = None
+    history: list[ChangeVersion] = []
 
 
-class AgentTask(BaseModel):
+AgentMode = Literal["propose", "revise", "feedback"]
+
+
+class AgentJob(BaseModel):
+    """One run of the proposing agent for a Proposal."""
+
     proposal_id: str
     bundle: str
+    mode: AgentMode
     title: str
     text: str
     submitted_by: str
+    feedback: str = ""
+    feedback_by: str = ""
+    # Current content of this Proposal's non-discarded changes, placed into the workspace first.
+    carried: list[ArticleChange] = []
+    # revise: the paths to revise. feedback: paths of accepted changes that must stay as they are.
+    targets: list[str] = []
+    locked: list[str] = []
+    attempt_key: str = ""
+
+
+class AgentOutcome(BaseModel):
+    changes: list[ArticleChange]
+    summary: str = ""
+    agent: str = ""
+    cost_usd: float | None = None
+
+
+class AgentCheck(BaseModel):
+    ok: bool
+    message: str
+    agent: str
+    seconds: float
 
 
 class ProposalInput(BaseModel):
@@ -70,6 +110,9 @@ class ProposalView(BaseModel):
     error: str | None = None
     commit: str | None = None
     reviewer: str | None = None
+    summary: str = ""  # the agent's own account of its latest run
+    cost_usd: float = 0.0
+    runs: int = 0
 
 
 class CommitRequest(BaseModel):

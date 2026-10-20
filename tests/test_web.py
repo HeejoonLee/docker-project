@@ -60,3 +60,15 @@ async def test_duplicate_and_invalid_bundles_rejected(http, uid):
     assert (await http.post("/api/bundles", json={"slug": f"d{uid}", "name": "x"})).status_code == 201
     assert (await http.post("/api/bundles", json={"slug": f"d{uid}", "name": "x"})).status_code == 409
     assert (await http.post("/api/bundles", json={"slug": "Bad Slug", "name": "x"})).status_code == 422
+
+
+async def test_settings_roundtrip_and_validation(http):
+    r = await http.get("/api/settings")
+    assert r.status_code == 200 and r.json()["app"]["agent"] == "fake"
+    bad = {"app": {"agent": "claude-cli", "agent_timeout_minutes": 30}, "claude_settings": "{not json"}
+    assert (await http.put("/api/settings", json=bad)).status_code == 422
+    good = {"app": {"agent": "claude-cli", "agent_timeout_minutes": 30}, "claude_settings": '{"model": "x"}'}
+    assert (await http.put("/api/settings", json=good)).status_code == 200
+    r = (await http.get("/api/settings")).json()
+    assert r["app"] == {"agent": "claude-cli", "agent_timeout_minutes": 30}
+    assert r["claude_settings"].strip() == '{"model": "x"}'

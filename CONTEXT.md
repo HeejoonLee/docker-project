@@ -48,6 +48,10 @@ The decision that commits an Article change into the knowledge base. All Article
 The decision that asks the AI for a new version of an Article change, optionally guided by the reviewer's feedback. Earlier versions are kept.
 _Avoid_: Re-propose, regenerate
 
+**Proposal feedback**:
+A Reviewer's comment on a whole Proposal that sends it back to the AI. Undecided Article changes may be reworked, added or withdrawn; accepted ones stay as they are.
+_Avoid_: Comment, re-plan
+
 **Edit**:
 The decision in which the reviewer rewrites an Article change by hand before accepting it.
 

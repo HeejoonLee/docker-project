@@ -25,3 +25,26 @@ def update(text: str, **fields) -> str:
     meta, body = split(text)
     meta.update(fields)
     return join(meta, body)
+
+
+SYSTEM_FIELDS = ("status", "sources", "generated", "review")
+
+
+def finalize(content: str, base_content: str | None, generated: dict) -> str:
+    """Make an agent-written Article safe to propose.
+
+    System fields are removed and rewritten (`status: proposed`, `generated`); frontmatter fields
+    present in the base version but dropped by the agent are restored, so unknown fields survive.
+    """
+    meta, body = split(content)
+    base_meta, _ = split(base_content) if base_content else ({}, "")
+    for key, value in base_meta.items():
+        if key not in meta and key not in SYSTEM_FIELDS:
+            meta[key] = value
+    for key in SYSTEM_FIELDS:
+        meta.pop(key, None)
+    if "sources" in base_meta:
+        meta["sources"] = base_meta["sources"]
+    meta["status"] = "proposed"
+    meta["generated"] = generated
+    return join(meta, body if body.startswith("\n") else "\n" + body)

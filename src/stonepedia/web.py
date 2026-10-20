@@ -19,10 +19,10 @@ from temporalio.common import SearchAttributePair, TypedSearchAttributes, Workfl
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError
 
-from stonepedia import config, frontmatter, git, search
-from stonepedia.models import BundleRun, BundleSpec, ProposalInput, ProposalView
+from stonepedia import appconfig, config, frontmatter, git, search
+from stonepedia.models import AgentCheck, BundleRun, BundleSpec, ProposalInput, ProposalView
 from stonepedia.temporal import connect
-from stonepedia.workflows import BundleWorkflow, ProposalWorkflow
+from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, ProposalWorkflow
 
 STATIC_DIR = Path(__file__).resolve().parents[2] / "web" / "dist"
 
@@ -179,6 +179,21 @@ class SubmitBody(BaseModel):
     reviewer: str
 
 
+class ReviseBody(BaseModel):
+    feedback: str = ""
+    reviewer: str
+
+
+class FeedbackBody(BaseModel):
+    text: str
+    reviewer: str
+
+
+class EditBody(BaseModel):
+    content: str
+    editor: str
+
+
 def _proposal_handle(request: Request, proposal_id: str):
     return _client(request).get_workflow_handle(f"proposal-{proposal_id}")
 
@@ -263,6 +278,27 @@ async def submit(proposal_id: str, body: SubmitBody, request: Request) -> Propos
     ))
 
 
+@app.post("/api/proposals/{proposal_id}/changes/{change_id}/revise")
+async def revise(proposal_id: str, change_id: str, body: ReviseBody, request: Request) -> ProposalView:
+    return await _update(_proposal_handle(request, proposal_id).execute_update(
+        ProposalWorkflow.revise, args=[change_id, body.feedback, body.reviewer.strip()]
+    ))
+
+
+@app.post("/api/proposals/{proposal_id}/changes/{change_id}/edit")
+async def edit(proposal_id: str, change_id: str, body: EditBody, request: Request) -> ProposalView:
+    return await _update(_proposal_handle(request, proposal_id).execute_update(
+        ProposalWorkflow.edit, args=[change_id, body.content, body.editor.strip()]
+    ))
+
+
+@app.post("/api/proposals/{proposal_id}/feedback")
+async def feedback(proposal_id: str, body: FeedbackBody, request: Request) -> ProposalView:
+    return await _update(_proposal_handle(request, proposal_id).execute_update(
+        ProposalWorkflow.feedback, args=[body.text, body.reviewer.strip()]
+    ))
+
+
 async def _update(coro):
     try:
         return await coro
@@ -274,6 +310,40 @@ async def _update(coro):
 
 def _quote(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+# ---------- Settings ----------
+
+
+class SettingsBody(BaseModel):
+    app: appconfig.AppConfig
+    claude_settings: str
+
+
+@app.get("/api/settings")
+async def get_settings(request: Request) -> SettingsBody:
+    cfg_dir = _settings(request).config_dir
+    return SettingsBody(app=appconfig.load(cfg_dir), claude_settings=appconfig.load_claude_settings(cfg_dir))
+
+
+@app.put("/api/settings")
+async def put_settings(body: SettingsBody, request: Request) -> SettingsBody:
+    cfg_dir = _settings(request).config_dir
+    try:
+        appconfig.save_claude_settings(cfg_dir, body.claude_settings)
+    except ValueError as err:
+        raise HTTPException(422, f"Claude settings: {err}")
+    appconfig.save(cfg_dir, body.app)
+    return body
+
+
+@app.post("/api/settings/test")
+async def test_agent(request: Request) -> AgentCheck:
+    return await _client(request).execute_workflow(
+        AgentCheckWorkflow.run,
+        id=f"agent-check-{secrets.token_hex(4)}",
+        task_queue=config.TASK_QUEUE,
+    )
 
 
 # ---------- Static UI ----------

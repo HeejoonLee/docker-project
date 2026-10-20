@@ -11,6 +11,8 @@ export interface ArticleChange {
   title: string
   decision: Decision
   stale: boolean
+  edited_by: string | null
+  history: { content: string; replaced_by: 'revise' | 'edit' | 'feedback'; note: string; by: string; at: string }[]
 }
 
 export interface Proposal {
@@ -24,6 +26,9 @@ export interface Proposal {
   error: string | null
   commit: string | null
   reviewer: string | null
+  summary: string
+  cost_usd: number
+  runs: number
 }
 
 export interface ProposalSummary {
@@ -39,6 +44,11 @@ export interface BundleSummary { slug: string; name: string; language: string; c
 export interface ArticleSummary { path: string; title: string; type: string; status: string }
 export interface BundleDetail extends BundleSummary { head: string | null; articles: ArticleSummary[] }
 export interface AppConfig { temporal_ui_url: string; namespace: string }
+export interface Settings {
+  app: { agent: 'claude-cli' | 'fake'; agent_timeout_minutes: number }
+  claude_settings: string
+}
+export interface AgentCheck { ok: boolean; message: string; agent: string; seconds: number }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -74,5 +84,14 @@ export const api = {
     request<ProposalSummary>('POST', '/api/proposals', p),
   decide: (id: string, changeId: string, decision: Decision) =>
     request<Proposal>('POST', `/api/proposals/${id}/changes/${changeId}/decision`, { decision }),
+  revise: (id: string, changeId: string, feedback: string, reviewer: string) =>
+    request<Proposal>('POST', `/api/proposals/${id}/changes/${changeId}/revise`, { feedback, reviewer }),
+  edit: (id: string, changeId: string, content: string, editor: string) =>
+    request<Proposal>('POST', `/api/proposals/${id}/changes/${changeId}/edit`, { content, editor }),
+  feedback: (id: string, text: string, reviewer: string) =>
+    request<Proposal>('POST', `/api/proposals/${id}/feedback`, { text, reviewer }),
+  settings: () => request<Settings>('GET', '/api/settings'),
+  saveSettings: (s: Settings) => request<Settings>('PUT', '/api/settings', s),
+  testAgent: () => request<AgentCheck>('POST', '/api/settings/test'),
   submit: (id: string, reviewer: string) => request<Proposal>('POST', `/api/proposals/${id}/submit`, { reviewer }),
 }
