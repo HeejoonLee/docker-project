@@ -5,6 +5,7 @@ import { LOCALES, useI18n } from './i18n'
 import BundlePage from './pages/BundlePage'
 import Bundles from './pages/Bundles'
 import Inbox from './pages/Inbox'
+import MaintenancePage from './pages/MaintenancePage'
 import NewProposal from './pages/NewProposal'
 import ProposalPage from './pages/ProposalPage'
 import SettingsPage from './pages/SettingsPage'
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/proposals/:id" element={<ProposalPage />} />
             <Route path="/bundles" element={<Bundles />} />
             <Route path="/bundles/:slug" element={<BundlePage />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         )}
@@ -44,6 +46,7 @@ function Header() {
         <NavLink to="/" end>{t('nav.inbox')}</NavLink>
         <NavLink to="/new">{t('nav.new')}</NavLink>
         <NavLink to="/bundles">{t('nav.bundles')}</NavLink>
+        <NavLink to="/maintenance">{t('nav.maintenance')}</NavLink>
         <NavLink to="/settings">{t('nav.settings')}</NavLink>
       </nav>
       <div className="topbar-right">

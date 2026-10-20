@@ -4,11 +4,11 @@ import asyncio
 from datetime import timedelta
 
 from temporalio import workflow
-from temporalio.common import RetryPolicy
+from temporalio.common import RetryPolicy, SearchAttributePair, TypedSearchAttributes
 from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from stonepedia import frontmatter, search
+    from stonepedia import config, frontmatter, search
     from stonepedia.activities import Activities
     from stonepedia.models import (
         AgentCheck,
@@ -24,10 +24,14 @@ with workflow.unsafe.imports_passed_through():
         CommitRequest,
         CommitResult,
         Decision,
+        Finding,
+        MaintenanceInput,
+        MaintenanceReport,
         ProposalInput,
         ProposalState,
         ProposalView,
         PushState,
+        SourceInput,
     )
 
 _SHORT = timedelta(minutes=2)
@@ -204,10 +208,12 @@ class ProposalWorkflow:
         self._view = ProposalView(
             id=inp.proposal_id,
             bundle=inp.bundle,
-            title=inp.title,
+            title=inp.title or inp.source.url,
             submitted_by=inp.submitted_by,
             source_kind=inp.source.kind,
             targets=inp.targets,
+            note=inp.note,
+            origin=inp.origin,
             state="generating",
         )
         self._submitted_by: str | None = None
@@ -223,6 +229,9 @@ class ProposalWorkflow:
             self._view.error = f"Could not read the Source: {_cause(err)}"
             self._set_state("failed")
             return self._view
+        if not inp.title:  # untitled link: use the page title
+            self._view.title = self._view.source.title
+            workflow.upsert_memo({"title": self._view.title})
         await self._run_agent(self._job("propose"))
         if not self._view.changes:
             self._set_state("failed")
@@ -247,10 +256,11 @@ class ProposalWorkflow:
             proposal_id=self._inp.proposal_id,
             bundle=self._inp.bundle,
             mode=mode,
-            title=self._inp.title,
+            title=self._view.title,
             source=self._view.source,
             submitted_by=self._inp.submitted_by,
             request_targets=self._inp.targets,
+            note=self._inp.note,
             feedback=feedback,
             targets=targets or [],
         )
@@ -344,7 +354,7 @@ class ProposalWorkflow:
                         title=self._view.title,
                         reviewer=reviewer,
                         changes=accepted,
-                        source_id=self._view.source.id if self._view.source else None,
+                        source_id=self._view.source.id if self._view.source and self._view.source.kind != "audit" else None,
                     ),
                 ],
                 start_to_close_timeout=_SHORT,
@@ -509,3 +519,69 @@ class AgentCheckWorkflow:
             heartbeat_timeout=timedelta(minutes=1),
             retry_policy=RetryPolicy(maximum_attempts=1),
         )
+
+
+@workflow.defn
+class MaintenanceWorkflow:
+    """One Maintenance check of one Bundle. Produces a report, and Proposals for changed links."""
+
+    @workflow.run
+    async def run(self, inp: MaintenanceInput) -> MaintenanceReport:
+        report = MaintenanceReport(bundle=inp.bundle, check=inp.check, requested_by=inp.requested_by)
+        workflow.upsert_memo({"check": inp.check, "requested_by": inp.requested_by})
+        if inp.check == "integrity":
+            report.findings = await workflow.execute_activity_method(
+                Activities.integrity_check, inp.bundle, start_to_close_timeout=timedelta(minutes=10), retry_policy=_RETRY
+            )
+            errors = sum(f.severity == "error" for f in report.findings)
+            warnings = len(report.findings) - errors
+            report.summary = f"{errors} errors, {warnings} warnings" if report.findings else "No problems found"
+        else:
+            changed = await workflow.execute_activity_method(
+                Activities.find_changed_links,
+                inp.bundle,
+                start_to_close_timeout=timedelta(minutes=60),
+                heartbeat_timeout=timedelta(minutes=5),
+                retry_policy=_RETRY,
+            )
+            for link in changed:
+                if link.error:
+                    report.findings.append(Finding(
+                        severity="warning", kind="link_unreachable", path=f"sources/{link.source_id}",
+                        message=f"{link.url}: {link.error}",
+                    ))
+                    continue
+                report.proposals.append(await self._open_refresh_proposal(inp, link))
+            report.summary = f"{len(report.proposals)} changed, {len(report.findings)} unreachable"
+        workflow.upsert_memo({"summary": report.summary, "check": inp.check})
+        return report
+
+    async def _open_refresh_proposal(self, inp: MaintenanceInput, link) -> str:
+        pid = workflow.now().strftime("%Y%m%d-%H%M%S-") + workflow.uuid4().hex[:4]
+        cited = ", ".join(f"`{p}`" for p in link.cited_by)
+        proposal = ProposalInput(
+            proposal_id=pid,
+            bundle=inp.bundle,
+            title=f"Updated: {link.title}",
+            source=SourceInput(kind="link", url=link.url),
+            submitted_by="Stonepedia maintenance",
+            note=(
+                f"This page changed since it was captured as Source `sources/{link.source_id}/` "
+                f"(compare with its text.md). Update the Articles that cite it ({cited}) to match the current "
+                "page. Change only what the page changed; if nothing relevant changed, make no edits."
+            ),
+            origin="maintenance",
+        )
+        await workflow.start_child_workflow(
+            ProposalWorkflow.run,
+            proposal,
+            id=f"proposal-{pid}",
+            task_queue=config.TASK_QUEUE,
+            parent_close_policy=workflow.ParentClosePolicy.ABANDON,
+            memo={"title": proposal.title, "submitted_by": proposal.submitted_by, "kind": "link"},
+            search_attributes=TypedSearchAttributes([
+                SearchAttributePair(search.BUNDLE, inp.bundle),
+                SearchAttributePair(search.PROPOSAL_STATE, "generating"),
+            ]),
+        )
+        return pid

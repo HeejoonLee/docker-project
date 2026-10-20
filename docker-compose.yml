@@ -14,6 +14,7 @@ x-app: &app
   environment:
     STONEPEDIA_TEMPORAL_ADDRESS: temporal:7233
     STONEPEDIA_TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-http://localhost:8233}
+    STONEPEDIA_TIMEZONE: ${TIMEZONE:-Asia/Seoul}
   volumes:
     - data:/data
   depends_on:

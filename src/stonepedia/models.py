@@ -10,7 +10,7 @@ from stonepedia.bundle import BundleSettings, Template
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 ChangeKind = Literal["create", "update", "retire"]
-SourceKind = Literal["text", "file", "link", "request"]
+SourceKind = Literal["text", "file", "link", "request", "audit"]
 Decision = Literal["pending", "accepted", "discarded"]
 ProposalState = Literal["generating", "awaiting_review", "committing", "done", "discarded", "failed"]
 
@@ -50,7 +50,7 @@ class SourceInput(BaseModel):
     """What the submitter gave us. Files are staged under <data>/uploads/<proposal id>/ by the web app."""
 
     kind: SourceKind
-    text: str = ""  # text and request
+    text: str = ""  # text, request and audit
     url: str = ""  # link
     filename: str = ""  # file: the uploaded file's original name
 
@@ -146,6 +146,7 @@ class AgentJob(BaseModel):
     source: SourceInfo
     submitted_by: str
     request_targets: list[str] = []  # Articles a Request is aimed at
+    note: str = ""
     feedback: str = ""
     feedback_by: str = ""
     # Current content of this Proposal's non-discarded changes, placed into the workspace first.
@@ -177,6 +178,8 @@ class ProposalInput(BaseModel):
     source: SourceInput
     submitted_by: str
     targets: list[str] = []  # Requests: Articles the Request is aimed at
+    note: str = ""  # extra context for the agent (e.g. why maintenance opened this Proposal)
+    origin: Literal["person", "maintenance"] = "person"
 
 
 class ProposalView(BaseModel):
@@ -187,6 +190,8 @@ class ProposalView(BaseModel):
     source_kind: SourceKind
     source: SourceInfo | None = None
     targets: list[str] = []
+    note: str = ""
+    origin: Literal["person", "maintenance"] = "person"
     state: ProposalState
     changes: list[ArticleChange] = []
     error: str | None = None
@@ -208,3 +213,36 @@ class CommitRequest(BaseModel):
 class CommitResult(BaseModel):
     commit: str | None = None
     stale_ids: list[str] = []
+
+
+class Finding(BaseModel):
+    severity: Literal["error", "warning"]
+    kind: str
+    path: str
+    message: str
+
+
+MaintenanceCheck = Literal["integrity", "links"]
+
+
+class MaintenanceInput(BaseModel):
+    bundle: str
+    check: MaintenanceCheck
+    requested_by: str = "schedule"
+
+
+class ChangedLink(BaseModel):
+    source_id: str
+    url: str
+    title: str
+    cited_by: list[str]
+    error: str = ""
+
+
+class MaintenanceReport(BaseModel):
+    bundle: str
+    check: MaintenanceCheck
+    requested_by: str
+    findings: list[Finding] = []
+    proposals: list[str] = []  # Proposals opened by this run
+    summary: str = ""

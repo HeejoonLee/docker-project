@@ -19,7 +19,7 @@ from temporalio.common import SearchAttributePair, TypedSearchAttributes, Workfl
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError
 
-from stonepedia import appconfig, bundle, config, git, search
+from stonepedia import appconfig, bundle, config, git, schedules, search
 from stonepedia.bundle import BundleSettings, Template
 from stonepedia.models import (
     AgentCheck,
@@ -27,6 +27,9 @@ from stonepedia.models import (
     BundleRun,
     BundleSpec,
     BundleStatus,
+    MaintenanceCheck,
+    MaintenanceInput,
+    MaintenanceReport,
     ProposalInput,
     ProposalView,
     PushState,
@@ -34,7 +37,7 @@ from stonepedia.models import (
 )
 from stonepedia.sources import SUPPORTED_EXTS
 from stonepedia.temporal import connect
-from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, ProposalWorkflow
+from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, MaintenanceWorkflow, ProposalWorkflow
 
 STATIC_DIR = Path(__file__).resolve().parents[2] / "web" / "dist"
 
@@ -332,7 +335,7 @@ async def create_proposal(
         raise HTTPException(422, "Enter a link starting with http:// or https://")
     if kind == "file" and (file is None or not file.filename):
         raise HTTPException(422, "Choose a file.")
-    proposal_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+    proposal_id = _new_proposal_id()
 
     filename = ""
     if kind == "file":
@@ -344,29 +347,37 @@ async def create_proposal(
                            appconfig.load(settings.config_dir).max_source_mb * 2**20)
 
     first_line = text.strip().splitlines()[0][:80] if text.strip() else ""
-    fallback = filename or url.strip() or first_line
+    fallback = filename or first_line  # links: the page title, filled in once the page is fetched
     inp = ProposalInput(
         proposal_id=proposal_id,
         bundle=bundle,
-        title=title or fallback or proposal_id,
+        title=title or fallback,
         source=SourceInput(kind=kind, text=text, url=url.strip(), filename=filename),
         submitted_by=submitted_by.strip() or "anonymous",
         targets=[t.strip() for t in targets.splitlines() if t.strip()] if kind == "request" else [],
     )
+    return await _start_proposal(request, inp)
+
+
+def _new_proposal_id() -> str:
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+
+
+async def _start_proposal(request: Request, inp: ProposalInput) -> ProposalSummary:
     await _client(request).start_workflow(
         ProposalWorkflow.run,
         inp,
-        id=f"proposal-{proposal_id}",
+        id=f"proposal-{inp.proposal_id}",
         task_queue=config.TASK_QUEUE,
-        memo={"title": inp.title, "submitted_by": inp.submitted_by, "kind": kind},
+        memo={"title": inp.title or inp.source.url or inp.proposal_id, "submitted_by": inp.submitted_by, "kind": inp.source.kind},
         search_attributes=TypedSearchAttributes(
             [SearchAttributePair(search.BUNDLE, inp.bundle), SearchAttributePair(search.PROPOSAL_STATE, "generating")]
         ),
     )
     return ProposalSummary(
-        id=proposal_id,
+        id=inp.proposal_id,
         bundle=inp.bundle,
-        title=inp.title,
+        title=inp.title or inp.source.url or inp.proposal_id,
         submitted_by=inp.submitted_by,
         state="generating",
         created_at=_ts(datetime.now(UTC)),
@@ -450,6 +461,114 @@ async def _update(coro):
 
 def _quote(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+# ---------- Maintenance ----------
+
+AUDIT_INSTRUCTIONS = """Review all Articles in this Bundle and propose fixes for:
+1. Duplicate or overlapping Articles: merge them into one and retire the others.
+2. Contradictions between Articles: fix them when the Bundle's own content settles the question;
+   otherwise record the conflict as an open question in each affected Article.
+3. Broken or outdated links and cross-references between Articles.
+4. Articles that do not follow the Template (type, required fields, structure).
+Only make changes you can justify from what the Bundle already contains."""
+
+
+class ReportSummary(BaseModel):
+    workflow_id: str
+    run_id: str
+    check: str
+    requested_by: str
+    started_at: str | None
+    status: str
+    summary: str
+
+
+class MaintenanceOverview(BaseModel):
+    timezone: str
+    schedules: dict[str, schedules.ScheduleConfig]
+    reports: list[ReportSummary]
+
+
+class RunBody(BaseModel):
+    requested_by: str
+
+
+class AuditBody(BaseModel):
+    requested_by: str
+    focus: str = ""
+
+
+@app.get("/api/maintenance/{slug}")
+async def get_maintenance(slug: str, request: Request) -> MaintenanceOverview:
+    await _bundle_status(request, slug)
+    client = _client(request)
+    reports = []
+    query = f"WorkflowType='MaintenanceWorkflow' AND Bundle='{_quote(slug)}'"
+    async for wf in client.list_workflows(query, limit=20):
+        memo = await wf.memo()
+        reports.append(ReportSummary(
+            workflow_id=wf.id,
+            run_id=wf.run_id,
+            check=memo.get("check", ""),
+            requested_by=memo.get("requested_by", "schedule"),
+            started_at=_ts(wf.start_time),
+            status=wf.status.name.lower() if wf.status else "",
+            summary=memo.get("summary", ""),
+        ))
+    reports.sort(key=lambda r: r.started_at or "", reverse=True)
+    return MaintenanceOverview(
+        timezone=_settings(request).timezone,
+        schedules={c: await schedules.get(client, slug, c) for c in ("integrity", "links")},
+        reports=reports,
+    )
+
+
+@app.put("/api/maintenance/{slug}/schedules/{check}")
+async def put_schedule(slug: str, check: MaintenanceCheck, body: schedules.ScheduleConfig, request: Request) -> schedules.ScheduleConfig:
+    await _bundle_status(request, slug)
+    return await schedules.put(_client(request), _settings(request), slug, check, body)
+
+
+@app.post("/api/maintenance/{slug}/run/{check}")
+async def run_maintenance(slug: str, check: MaintenanceCheck, body: RunBody, request: Request) -> ReportSummary:
+    await _bundle_status(request, slug)
+    who = body.requested_by.strip() or "anonymous"
+    handle = await _client(request).start_workflow(
+        MaintenanceWorkflow.run,
+        MaintenanceInput(bundle=slug, check=check, requested_by=who),
+        id=f"maintenance-{slug}-{check}-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}",
+        task_queue=config.TASK_QUEUE,
+        memo={"check": check, "requested_by": who},
+        search_attributes=TypedSearchAttributes([SearchAttributePair(search.BUNDLE, slug)]),
+    )
+    return ReportSummary(workflow_id=handle.id, run_id=handle.result_run_id or "", check=check, requested_by=who,
+                         started_at=_ts(datetime.now(UTC)), status="running", summary="")
+
+
+@app.get("/api/maintenance/reports/{workflow_id}/{run_id}")
+async def get_report(workflow_id: str, run_id: str, request: Request) -> MaintenanceReport | None:
+    handle = _client(request).get_workflow_handle_for(MaintenanceWorkflow.run, workflow_id, run_id=run_id)
+    try:
+        desc = await handle.describe()
+        if desc.status is None or desc.status.name != "COMPLETED":
+            return None
+        return await handle.result()
+    except (RPCError, WorkflowFailureError):
+        raise HTTPException(404, "No such report.")
+
+
+@app.post("/api/bundles/{slug}/audit", status_code=201)
+async def start_audit(slug: str, body: AuditBody, request: Request) -> ProposalSummary:
+    await _bundle_status(request, slug)
+    text = AUDIT_INSTRUCTIONS + (f"\n\nFocus: {body.focus.strip()}" if body.focus.strip() else "")
+    return await _start_proposal(request, ProposalInput(
+        proposal_id=_new_proposal_id(),
+        bundle=slug,
+        title="AI audit" + (f": {body.focus.strip()[:60]}" if body.focus.strip() else ""),
+        source=SourceInput(kind="audit", text=text),
+        submitted_by=body.requested_by.strip() or "anonymous",
+    ))
 
 
 # ---------- Settings ----------

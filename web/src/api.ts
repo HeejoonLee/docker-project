@@ -85,6 +85,15 @@ export interface BundleDetail {
 export interface TypeDef { name: string; rule: string; sections: string[] }
 export interface FieldDef { name: string; written_by: 'ai' | 'system'; required: boolean; description: string }
 export interface Template { types: TypeDef[]; fields: FieldDef[]; guidance: string }
+export type Check = 'integrity' | 'links'
+export interface ScheduleConfig { cadence: 'off' | 'daily' | 'weekly'; time: string; weekday: number; next_run?: string | null }
+export interface ReportSummary {
+  workflow_id: string; run_id: string; check: Check | ''; requested_by: string
+  started_at: string | null; status: string; summary: string
+}
+export interface Finding { severity: 'error' | 'warning'; kind: string; path: string; message: string }
+export interface MaintenanceReport { bundle: string; check: Check; requested_by: string; findings: Finding[]; proposals: string[]; summary: string }
+export interface MaintenanceOverview { timezone: string; schedules: Record<Check, ScheduleConfig>; reports: ReportSummary[] }
 export interface NewBundle {
   slug: string; name: string; language: string; id_prefix: string
   clone_url: string; branch: string; root: string; remote_url: string
@@ -132,6 +141,15 @@ export const api = {
     request<Template>('GET', `/api/bundles/${slug}/template${inferred ? '?inferred=true' : ''}`),
   saveTemplate: (slug: string, editor: string, template: Template) =>
     request<Template>('PUT', `/api/bundles/${slug}/template`, { editor, template }),
+  maintenance: (slug: string) => request<MaintenanceOverview>('GET', `/api/maintenance/${slug}`),
+  saveSchedule: (slug: string, check: Check, cfg: ScheduleConfig) =>
+    request<ScheduleConfig>('PUT', `/api/maintenance/${slug}/schedules/${check}`, cfg),
+  runCheck: (slug: string, check: Check, requested_by: string) =>
+    request<ReportSummary>('POST', `/api/maintenance/${slug}/run/${check}`, { requested_by }),
+  report: (r: ReportSummary) =>
+    request<MaintenanceReport | null>('GET', `/api/maintenance/reports/${encodeURIComponent(r.workflow_id)}/${r.run_id}`),
+  audit: (slug: string, requested_by: string, focus: string) =>
+    request<ProposalSummary>('POST', `/api/bundles/${slug}/audit`, { requested_by, focus }),
   retryPush: (slug: string) => request<PushState>('POST', `/api/bundles/${slug}/push`),
   proposals: (filter: { bundle?: string; state?: string }) => {
     const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][])

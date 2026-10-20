@@ -13,6 +13,7 @@ class Settings:
     namespace: str
     data_dir: Path
     temporal_ui_url: str
+    timezone: str = "Asia/Seoul"  # for maintenance schedules
 
     @property
     def bundles_dir(self) -> Path:
@@ -42,4 +43,5 @@ def load() -> Settings:
         namespace=os.environ.get("STONEPEDIA_NAMESPACE", "default"),
         data_dir=Path(os.environ.get("STONEPEDIA_DATA_DIR", ".data")).resolve(),
         temporal_ui_url=os.environ.get("STONEPEDIA_TEMPORAL_UI_URL", "http://localhost:8233"),
+        timezone=os.environ.get("STONEPEDIA_TIMEZONE", "Asia/Seoul"),
     )

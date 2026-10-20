@@ -5,7 +5,7 @@ Submit a Source → an agent proposes Article changes → a human accepts, revis
 
 Vocabulary: [CONTEXT.md](CONTEXT.md) · Decisions: [docs/adr](docs/adr) · Plan: [docs/plan.md](docs/plan.md)
 
-> Status: phase 4 of 6. Claude Code writes Proposals from text, files (PDF, Word, PowerPoint, Excel, HTML, images), intranet links and Requests; Bundles are git repos (new or cloned, optionally a subfolder) that push to a remote, with an editable Template. Maintenance checks and offline packaging come next ([plan](docs/plan.md)).
+> Status: phase 5 of 6. Claude Code writes Proposals from text, files (PDF, Word, PowerPoint, Excel, HTML, images), intranet links and Requests; Bundles are git repos (new or cloned, optionally a subfolder) that push to a remote, with an editable Template; scheduled integrity checks, link refresh and AI audits keep them healthy. Offline packaging comes next ([plan](docs/plan.md)).
 
 ## Run it
 

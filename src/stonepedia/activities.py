@@ -5,6 +5,7 @@ Article paths in ArticleChange are relative to the Bundle root; repo paths are r
 
 import asyncio
 import hashlib
+import json
 import os
 import shutil
 import tempfile
@@ -17,7 +18,7 @@ from temporalio import activity
 from temporalio.client import Client
 from temporalio.exceptions import ApplicationError
 
-from stonepedia import appconfig, bundle, frontmatter, git, sources
+from stonepedia import appconfig, bundle, frontmatter, git, maintenance, sources
 from stonepedia.agent import TASK_DIR, AgentConfigError, AgentError, claude, fake, prompt
 from stonepedia.bundle import BundleSettings, Template
 from stonepedia.config import Settings
@@ -28,10 +29,13 @@ from stonepedia.models import (
     ArticleChange,
     BundleInit,
     BundleSpec,
+    ChangedLink,
+    Finding,
     CommitRequest,
     CommitResult,
     ProposalInput,
     SourceInfo,
+    SourceInput,
 )
 
 
@@ -314,6 +318,65 @@ class Activities:
         handle = self.client.get_workflow_handle(f"bundle-{bundle_slug}")
         return await handle.execute_update(BundleWorkflow.commit, req)
 
+    # ---------- Maintenance ----------
+
+    @activity.defn
+    async def integrity_check(self, bundle_slug: str) -> list[Finding]:
+        spec = await self._spec(bundle_slug)
+        repo = self._repo(bundle_slug)
+        return await asyncio.to_thread(maintenance.check, repo / spec.root, repo)
+
+    @activity.defn
+    async def find_changed_links(self, bundle_slug: str) -> list[ChangedLink]:
+        """Re-fetch every cited link Source; return those whose text changed since last seen."""
+        spec = await self._spec(bundle_slug)
+        root = self._repo(bundle_slug) / spec.root
+        cfg = appconfig.load(self.settings.config_dir)
+        seen_file = self.settings.data_dir / "maintenance" / bundle_slug / "links.json"
+        seen: dict[str, str] = json.loads(seen_file.read_text()) if seen_file.exists() else {}
+
+        cited_by: dict[str, list[str]] = {}
+        for rel, meta in bundle.articles(root):
+            if meta.get("status") == "retired":
+                continue
+            for src in meta.get("sources") or []:
+                if isinstance(src, dict) and src.get("id"):
+                    cited_by.setdefault(str(src["id"]), []).append(rel)
+
+        newest: dict[str, tuple[str, dict]] = {}  # url -> (source id, meta) of the latest capture
+        for meta_file in sorted((root / "sources").glob("*/meta.yaml")) if (root / "sources").is_dir() else []:
+            meta = yaml.safe_load(meta_file.read_text()) or {}
+            sid = meta_file.parent.name
+            if meta.get("kind") != "link" or sid not in cited_by:
+                continue
+            url = meta.get("url", "")
+            if url not in newest or meta.get("submitted_at", "") > newest[url][1].get("submitted_at", ""):
+                newest[url] = (sid, meta)
+
+        changed = []
+        for url, (sid, meta) in newest.items():
+            activity.heartbeat(url)
+            old_text = (root / "sources" / sid / "text.md").read_text(errors="replace")
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    await asyncio.to_thread(
+                        sources.prepare, SourceInput(kind="link", url=url), None, Path(tmp) / "s", "maintenance",
+                        "", cfg.max_source_mb * 2**20, cfg.verify_link_certificates,
+                    )
+                    new_text = (Path(tmp) / "s" / "text.md").read_text(errors="replace")
+                except sources.SourceError as err:
+                    changed.append(ChangedLink(source_id=sid, url=url, title=meta.get("title", url),
+                                               cited_by=cited_by[sid], error=str(err)))
+                    continue
+            digest = hashlib.sha256(new_text.encode()).hexdigest()
+            if new_text.strip() == old_text.strip() or seen.get(url) == digest:
+                continue
+            seen[url] = digest
+            changed.append(ChangedLink(source_id=sid, url=url, title=meta.get("title", url), cited_by=cited_by[sid]))
+        seen_file.parent.mkdir(parents=True, exist_ok=True)
+        seen_file.write_text(json.dumps(seen, indent=2))
+        return changed
+
     def all(self) -> list:
         return [
             self.init_bundle,
@@ -327,6 +390,8 @@ class Activities:
             self.refresh_base,
             self.commit_changes,
             self.commit_via_bundle,
+            self.integrity_check,
+            self.find_changed_links,
         ]
 
 
@@ -412,7 +477,8 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str) -> list[Ar
         if carried.get(path) == written:
             content = written  # carried over and left untouched by the agent
         else:
-            content = frontmatter.finalize(written, base_content, generated, source_entry(job.source, path))
+            cite = None if job.source.kind == "audit" else source_entry(job.source, path)
+            content = frontmatter.finalize(written, base_content, generated, cite)
         meta, _ = frontmatter.split(content)
         changes.append(ArticleChange(
             id=change_id(path),

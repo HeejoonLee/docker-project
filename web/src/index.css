@@ -181,3 +181,13 @@ tr.retired td { color: var(--muted); text-decoration: line-through; }
 .fields input:not([type=checkbox]) { width: 100%; }
 .fields input.wide { min-width: 240px; }
 .sticky-actions { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; }
+.check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.check-card { display: flex; flex-direction: column; gap: 8px; }
+.check-card h2 { margin: 0; }
+.check-card label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 0.9rem; }
+.schedule-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.report { margin: 8px 0; }
+.report summary { cursor: pointer; }
+.tag { display: inline-block; margin: 0 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+.sev-error { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+.sev-warning { background: var(--warn-bg); color: var(--warn); border-color: transparent; }

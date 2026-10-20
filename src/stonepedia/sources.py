@@ -35,12 +35,12 @@ def prepare(source: SourceInput, upload: Path | None, dest: Path, submitted_by: 
     pages: int | None = None
     url = ""
     filename = ""
-    if source.kind in ("text", "request"):
-        original = "request.md" if source.kind == "request" else "text.md"
+    if source.kind in ("text", "request", "audit"):
+        original = "text.md" if source.kind == "text" else "request.md"
         body = source.text.strip()
         if not body:
             raise SourceError("The text is empty.")
-        if source.kind == "request":
+        if source.kind in ("request", "audit"):
             stamp = datetime.now(UTC).strftime("%Y-%m-%d")
             (dest / original).write_text(f"> Request by {submitted_by} on {stamp}\n\n{body}\n")
         text = body

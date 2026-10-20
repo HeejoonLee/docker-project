@@ -81,6 +81,11 @@ def _material(job: AgentJob) -> str:
         ]
         if job.request_targets:
             lines.append("It is aimed at: " + ", ".join(f"`{p}`" for p in job.request_targets) + ".")
+    elif src.kind == "audit":
+        lines = [
+            f"This is an audit of the existing Articles requested by {src.submitted_by}; the instructions are in "
+            f"`{folder}/request.md`. It brings no new material: work only from what the Bundle already contains.",
+        ]
     elif src.kind == "link":
         lines = [
             f"The material was fetched from {src.url}. `{folder}/text.md` is its text; "
@@ -101,10 +106,13 @@ def _material(job: AgentJob) -> str:
         ]
     for warning in src.warnings:
         lines.append(f"Note: {warning}")
-    lines.append(
-        "The system adds this Source to the `sources` field of every Article you create or change; "
-        "refer to it in the body where useful (e.g. by page)."
-    )
+    if job.note:
+        lines.append(f"Context: {job.note}")
+    if src.kind != "audit":
+        lines.append(
+            "The system adds this Source to the `sources` field of every Article you create or change; "
+            "refer to it in the body where useful (e.g. by page)."
+        )
     return "\n".join(lines)
 
 
