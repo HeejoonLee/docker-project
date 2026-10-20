@@ -13,7 +13,8 @@ x-app: &app
   restart: unless-stopped
   environment:
     STONEPEDIA_TEMPORAL_ADDRESS: temporal:7233
-    STONEPEDIA_TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-http://localhost:8233}
+    STONEPEDIA_TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-}
+    STONEPEDIA_TEMPORAL_UI_PORT: ${TEMPORAL_UI_PORT:-8233}
     STONEPEDIA_TIMEZONE: ${TIMEZONE:-Asia/Seoul}
   volumes:
     - data:/data
@@ -95,6 +96,12 @@ services:
     <<: *app
     ports:
       - "${STONEPEDIA_PORT:-8080}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
   pgdata:

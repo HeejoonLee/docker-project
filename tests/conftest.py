@@ -30,7 +30,7 @@ def settings(tmp_path: Path) -> Settings:
         temporal_address="unused",
         namespace="default",
         data_dir=tmp_path,
-        temporal_ui_url="http://localhost:8233",
+        temporal_ui_url="",
     )
 
 

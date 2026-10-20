@@ -140,3 +140,9 @@ async def _wait(http, pid, state):
             return view
         await asyncio.sleep(0.1)
     raise AssertionError(f"{view['state']}: {view.get('error')}")
+
+
+async def test_config_derives_temporal_ui_from_host_and_health(http):
+    r = (await http.get("/api/config", headers={"host": "kb.intra:8080"})).json()
+    assert r["temporal_ui_url"] == "http://kb.intra:8233"
+    assert (await http.get("/api/health")).json() == {"ok": True}

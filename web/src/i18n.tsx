@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import en from './locales/en.json'
 import ko from './locales/ko.json'
 
@@ -21,6 +21,7 @@ function readLang(): string {
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState(readLang)
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
   const setLang = (l: string) => {
     setLangState(l)
     try { localStorage.setItem('stonepedia.lang', l) } catch { /* ignore */ }

@@ -12,7 +12,8 @@ class Settings:
     temporal_address: str
     namespace: str
     data_dir: Path
-    temporal_ui_url: str
+    temporal_ui_url: str  # empty: same host as the web app, on temporal_ui_port
+    temporal_ui_port: int = 8233
     timezone: str = "Asia/Seoul"  # for maintenance schedules
 
     @property
@@ -42,6 +43,7 @@ def load() -> Settings:
         temporal_address=os.environ.get("STONEPEDIA_TEMPORAL_ADDRESS", "localhost:7233"),
         namespace=os.environ.get("STONEPEDIA_NAMESPACE", "default"),
         data_dir=Path(os.environ.get("STONEPEDIA_DATA_DIR", ".data")).resolve(),
-        temporal_ui_url=os.environ.get("STONEPEDIA_TEMPORAL_UI_URL", "http://localhost:8233"),
+        temporal_ui_url=os.environ.get("STONEPEDIA_TEMPORAL_UI_URL", ""),
+        temporal_ui_port=int(os.environ.get("STONEPEDIA_TEMPORAL_UI_PORT", "8233")),
         timezone=os.environ.get("STONEPEDIA_TIMEZONE", "Asia/Seoul"),
     )

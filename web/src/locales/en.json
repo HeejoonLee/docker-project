@@ -216,5 +216,7 @@
   "mt.day.3": "Wednesday",
   "mt.day.4": "Thursday",
   "mt.day.5": "Friday",
-  "mt.day.6": "Saturday"
+  "mt.day.6": "Saturday",
+  "mt.sev.error": "Error",
+  "mt.sev.warning": "Warning"
 }

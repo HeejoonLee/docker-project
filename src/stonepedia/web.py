@@ -6,7 +6,7 @@ Temporal client, and reads Bundle repos only to display them.
 
 import secrets
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from temporalio.client import Client, WorkflowFailureError, WorkflowQueryFailedError, WorkflowUpdateFailedError
 from temporalio.common import SearchAttributePair, TypedSearchAttributes, WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
+from temporalio.api.workflowservice.v1 import GetSystemInfoRequest
 from temporalio.service import RPCError
 
 from stonepedia import appconfig, bundle, config, git, schedules, search
@@ -109,7 +110,19 @@ class TemplateBody(BaseModel):
 
 @app.get("/api/config")
 async def get_config(request: Request) -> dict:
-    return {"temporal_ui_url": _settings(request).temporal_ui_url, "namespace": _settings(request).namespace}
+    settings = _settings(request)
+    ui = settings.temporal_ui_url or f"{request.url.scheme}://{request.url.hostname}:{settings.temporal_ui_port}"
+    return {"temporal_ui_url": ui.rstrip("/"), "namespace": settings.namespace}
+
+
+@app.get("/api/health")
+async def health(request: Request) -> dict:
+    """For Docker health checks: the web app is up and can reach Temporal."""
+    try:
+        await _client(request).workflow_service.get_system_info(GetSystemInfoRequest(), timeout=timedelta(seconds=3))
+    except Exception as err:  # any failure means unhealthy
+        raise HTTPException(503, f"Temporal unreachable: {err}")
+    return {"ok": True}
 
 
 @app.get("/api/bundles")

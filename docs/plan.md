@@ -2,6 +2,8 @@
 
 Vocabulary: [CONTEXT.md](../CONTEXT.md). Decisions: [docs/adr](adr/).
 
+Status (2026-10-21): all six phases are implemented; see the git history for what each delivered. Deviations from this plan: link refresh and audits replaced the "digest" idea once Claude Code became the agent (ADR 0004), Bundles may be one folder of a repository, and the web app also writes machine settings and uploads (never Bundle content).
+
 ## Runtime shape
 
 One `docker compose up`, five services from four images:

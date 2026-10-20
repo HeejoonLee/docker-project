@@ -145,7 +145,7 @@ function ReportRow({ r }: { r: ReportSummary }) {
                 <tbody>
                   {report.findings.map((f, i) => (
                     <tr key={i}>
-                      <td><span className={`badge sev-${f.severity}`}>{f.severity}</span></td>
+                      <td><span className={`badge sev-${f.severity}`}>{t(`mt.sev.${f.severity}`)}</span></td>
                       <td className="nowrap">{f.kind}</td>
                       <td><code className="path">{f.path}</code></td>
                       <td>{f.message}</td>

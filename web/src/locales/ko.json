@@ -216,5 +216,7 @@
   "mt.day.3": "수요일",
   "mt.day.4": "목요일",
   "mt.day.5": "금요일",
-  "mt.day.6": "토요일"
+  "mt.day.6": "토요일",
+  "mt.sev.error": "오류",
+  "mt.sev.warning": "경고"
 }

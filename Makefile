@@ -1,4 +1,4 @@
-.PHONY: dev test up down logs web
+.PHONY: dev test up down logs web bundle
 
 dev:   ## Run everything on the host (hot reload)
 	./scripts/dev.sh
@@ -17,3 +17,6 @@ down:  ## Stop the docker stack (data is kept)
 
 logs:  ## Follow app logs
 	docker compose logs -f web worker
+
+bundle: ## Build the offline install package in dist/
+	./scripts/bundle.sh
