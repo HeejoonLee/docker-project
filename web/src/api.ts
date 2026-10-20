@@ -59,8 +59,36 @@ export interface ProposalSummary {
 }
 
 export interface BundleSummary { slug: string; name: string; language: string; created_at: string | null }
-export interface ArticleSummary { path: string; title: string; type: string; status: string }
-export interface BundleDetail extends BundleSummary { head: string | null; articles: ArticleSummary[] }
+export interface ArticleSummary { path: string; id: string; title: string; type: string; status: string }
+export interface BundleSettings {
+  name: string
+  language: string
+  id_prefix: string
+  id_field: string
+  id_digits: number
+  generate_index: boolean
+  generate_manifest: boolean
+}
+export interface PushState { state: 'off' | 'ok' | 'pending' | 'failed'; error: string; retry: boolean; at: string }
+export interface BundleDetail {
+  slug: string
+  name: string
+  settings: BundleSettings
+  root: string
+  remote_url: string
+  branch: string
+  clone_url: string
+  push: PushState
+  head: string | null
+  articles: ArticleSummary[]
+}
+export interface TypeDef { name: string; rule: string; sections: string[] }
+export interface FieldDef { name: string; written_by: 'ai' | 'system'; required: boolean; description: string }
+export interface Template { types: TypeDef[]; fields: FieldDef[]; guidance: string }
+export interface NewBundle {
+  slug: string; name: string; language: string; id_prefix: string
+  clone_url: string; branch: string; root: string; remote_url: string
+}
 export interface AppConfig { temporal_ui_url: string; namespace: string }
 export interface Settings {
   app: {
@@ -97,8 +125,14 @@ export const api = {
   bundle: (slug: string) => request<BundleDetail>('GET', `/api/bundles/${slug}`),
   article: (slug: string, path: string) =>
     request<{ path: string; content: string }>('GET', `/api/bundles/${slug}/articles/${path}`),
-  createBundle: (b: { slug: string; name: string; language: string }) =>
-    request<BundleSummary>('POST', '/api/bundles', b),
+  createBundle: (b: NewBundle) => request<BundleSummary>('POST', '/api/bundles', b),
+  saveBundleSettings: (slug: string, body: { editor: string; settings: BundleSettings; remote_url: string; branch: string }) =>
+    request<BundleDetail>('PUT', `/api/bundles/${slug}/settings`, body),
+  template: (slug: string, inferred = false) =>
+    request<Template>('GET', `/api/bundles/${slug}/template${inferred ? '?inferred=true' : ''}`),
+  saveTemplate: (slug: string, editor: string, template: Template) =>
+    request<Template>('PUT', `/api/bundles/${slug}/template`, { editor, template }),
+  retryPush: (slug: string) => request<PushState>('POST', `/api/bundles/${slug}/push`),
   proposals: (filter: { bundle?: string; state?: string }) => {
     const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][])
     return request<ProposalSummary[]>('GET', `/api/proposals?${q}`)

@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
+from stonepedia.bundle import BundleSettings, Template
+
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 ChangeKind = Literal["create", "update", "retire"]
@@ -14,16 +16,33 @@ ProposalState = Literal["generating", "awaiting_review", "committing", "done", "
 
 
 class BundleSpec(BaseModel):
+    """Machine-level facts about a Bundle, kept in its BundleWorkflow.
+
+    Knowledge-level settings (language, ids, Template) live in the repo under .stonepedia/.
+    """
+
     slug: str
     name: str
-    language: str = "ko"
-    id_prefix: str = ""
+    language: str = "ko"  # initial value for a new Bundle's settings
+    id_prefix: str = ""  # initial value for a new Bundle's settings
+    clone_url: str = ""  # set when the Bundle was created from an existing repo
+    remote_url: str = ""  # where commits are pushed; empty = local only
+    branch: str = "main"
+    root: str = "."  # the Bundle's folder inside the repo
 
     @field_validator("slug")
     @classmethod
     def _slug(cls, v: str) -> str:
         if not SLUG_RE.match(v):
             raise ValueError("slug must be lowercase letters, digits and dashes")
+        return v
+
+    @field_validator("root")
+    @classmethod
+    def _root(cls, v: str) -> str:
+        v = v.strip().strip("/") or "."
+        if v.startswith("/") or ".." in v.split("/"):
+            raise ValueError("root must be a folder inside the repository")
         return v
 
 
@@ -55,9 +74,38 @@ class SourceInfo(BaseModel):
     preview: str = ""  # start of the extracted text, for the review screen
 
 
+class PushState(BaseModel):
+    state: Literal["off", "ok", "pending", "failed"] = "off"
+    error: str = ""
+    retry: bool = True  # whether the workflow retries by itself
+    at: str = ""
+
+
+class BundleStatus(BaseModel):
+    spec: BundleSpec
+    push: PushState
+    last_commit: str | None = None
+
+
+class BundleConfigUpdate(BaseModel):
+    """A change from the Bundle settings page. None = leave as is."""
+
+    editor: str
+    settings: "BundleSettings | None" = None
+    template: "Template | None" = None
+    remote_url: str | None = None
+    branch: str | None = None
+
+
+class BundleInit(BaseModel):
+    head: str
+    branch: str
+
+
 class BundleRun(BaseModel):
     spec: BundleSpec
     initialized: bool = False
+    push: PushState = PushState()
 
 
 class ChangeVersion(BaseModel):
@@ -92,6 +140,7 @@ class AgentJob(BaseModel):
 
     proposal_id: str
     bundle: str
+    root: str = "."
     mode: AgentMode
     title: str
     source: SourceInfo

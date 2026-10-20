@@ -16,8 +16,10 @@ with workflow.unsafe.imports_passed_through():
         AgentMode,
         AgentOutcome,
         ArticleChange,
+        BundleConfigUpdate,
         BundleRun,
         BundleSpec,
+        BundleStatus,
         ChangeVersion,
         CommitRequest,
         CommitResult,
@@ -25,6 +27,7 @@ with workflow.unsafe.imports_passed_through():
         ProposalInput,
         ProposalState,
         ProposalView,
+        PushState,
     )
 
 _SHORT = timedelta(minutes=2)
@@ -34,51 +37,161 @@ _RETRY = RetryPolicy(maximum_attempts=3)
 
 @workflow.defn
 class BundleWorkflow:
-    """Owns one Bundle repo and serializes every git write to it."""
+    """Owns one Bundle repo: serializes every git write to it and pushes to its remote."""
 
     def __init__(self) -> None:
         self._spec: BundleSpec | None = None
         self._ready = False
         self._lock = asyncio.Lock()
         self._last_commit: str | None = None
+        self._push = PushState()
+        self._push_wanted = False
 
     @workflow.run
     async def run(self, inp: BundleRun) -> None:
-        spec = self._spec = inp.spec
+        self._spec = inp.spec
+        self._push = inp.push
         if not inp.initialized:
-            self._last_commit = await workflow.execute_activity_method(
-                Activities.init_bundle, spec, start_to_close_timeout=_SHORT, retry_policy=_RETRY
+            init = await workflow.execute_activity_method(
+                Activities.init_bundle, inp.spec, start_to_close_timeout=timedelta(minutes=15), retry_policy=_RETRY
             )
+            self._spec.branch = init.branch
+            self._last_commit = init.head
+            if self._spec.remote_url or self._spec.clone_url:
+                self._spec.remote_url = self._spec.remote_url or self._spec.clone_url
+                self._push_wanted = True  # publish the first commit (Bundle setup)
+                self._push = PushState(state="pending")
         self._ready = True
-        await workflow.wait_condition(
-            lambda: workflow.info().is_continue_as_new_suggested() and workflow.all_handlers_finished()
-        )
-        workflow.continue_as_new(BundleRun(spec=spec, initialized=True))
+
+        while not self._should_restart():
+            try:
+                await workflow.wait_condition(
+                    lambda: self._push_wanted or self._should_restart(), timeout=self._retry_after()
+                )
+            except asyncio.TimeoutError:
+                self._push_wanted = True  # automatic retry after a failed push
+            if self._push_wanted and not self._should_restart():
+                self._push_wanted = False
+                await self._push_now()
+        workflow.continue_as_new(BundleRun(spec=self._spec, initialized=True, push=self._push))
+
+    def _should_restart(self) -> bool:
+        return workflow.info().is_continue_as_new_suggested() and workflow.all_handlers_finished()
+
+    def _retry_after(self) -> timedelta | None:
+        if self._push.state == "failed" and self._push.retry:
+            return timedelta(minutes=10)
+        return None
+
+    async def _push_now(self) -> None:
+        assert self._spec is not None
+        if not self._spec.remote_url:
+            self._push = PushState(state="off")
+            return
+        async with self._lock:
+            try:
+                await workflow.execute_activity_method(
+                    Activities.push_bundle,
+                    self._spec,
+                    start_to_close_timeout=timedelta(minutes=5),
+                    retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=5)),
+                )
+                self._push = PushState(state="ok", at=_now())
+            except ActivityError as err:
+                cause = err.cause
+                conflict = isinstance(cause, ApplicationError) and cause.type == "Conflict"
+                self._push = PushState(state="failed", error=_cause(err), retry=not conflict, at=_now())
+
+    async def _sync_first(self) -> None:
+        """Before writing, pull in remote commits so stale checks see them. Offline is not fatal."""
+        assert self._spec is not None
+        if not self._spec.remote_url:
+            return
+        try:
+            await workflow.execute_activity_method(
+                Activities.sync_bundle,
+                self._spec,
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=RetryPolicy(maximum_attempts=1),
+            )
+        except ActivityError as err:
+            self._push = PushState(state="failed", error=_cause(err), retry=self._push.retry, at=_now())
+
+    def _after_write(self, commit: str | None) -> None:
+        if commit:
+            self._last_commit = commit
+            if self._spec and self._spec.remote_url:
+                self._push_wanted = True
+                if self._push.state != "failed":
+                    self._push = PushState(state="pending")
 
     @workflow.update
     async def commit(self, req: CommitRequest) -> CommitResult:
         await workflow.wait_condition(lambda: self._ready)
         assert self._spec is not None
         async with self._lock:
+            await self._sync_first()
             result = await workflow.execute_activity_method(
                 Activities.commit_changes,
-                args=[self._spec.slug, req],
+                args=[self._spec, req],
                 start_to_close_timeout=_SHORT,
                 retry_policy=_RETRY,
             )
-        if result.commit:
-            self._last_commit = result.commit
+        self._after_write(result.commit)
         return result
 
     @workflow.update
+    async def save_config(self, req: BundleConfigUpdate) -> BundleStatus:
+        """Change Bundle settings, Template and/or remote. Settings and Template are committed."""
+        await workflow.wait_condition(lambda: self._ready)
+        assert self._spec is not None
+        async with self._lock:
+            if req.remote_url is not None or req.branch is not None:
+                self._spec.remote_url = req.remote_url if req.remote_url is not None else self._spec.remote_url
+                self._spec.branch = req.branch or self._spec.branch
+                await workflow.execute_activity_method(
+                    Activities.set_remote, self._spec, start_to_close_timeout=_SHORT, retry_policy=_RETRY
+                )
+                self._push = PushState(state="pending" if self._spec.remote_url else "off")
+                self._push_wanted = bool(self._spec.remote_url)
+            if req.settings is not None or req.template is not None:
+                await self._sync_first()
+                commit = await workflow.execute_activity_method(
+                    Activities.save_bundle_config,
+                    args=[self._spec, req.settings, req.template, req.editor],
+                    start_to_close_timeout=_SHORT,
+                    retry_policy=_RETRY,
+                )
+                self._after_write(commit)
+            if req.settings is not None:
+                self._spec.name = req.settings.name
+                workflow.upsert_memo({"name": req.settings.name, "language": req.settings.language})
+        return self.status()
+
+    @workflow.update
+    def retry_push(self) -> BundleStatus:
+        self._push_wanted = True
+        self._push = PushState(state="pending")
+        return self.status()
+
+    @workflow.update(unfinished_policy=workflow.HandlerUnfinishedPolicy.ABANDON)
     async def wait_ready(self) -> str | None:
-        """Returns once the Bundle repo exists, with its latest commit."""
+        """Returns once the Bundle repo exists, with its latest commit. Abandoned if creation fails."""
         await workflow.wait_condition(lambda: self._ready)
         return self._last_commit
 
     @workflow.query
     def info(self) -> BundleSpec | None:
         return self._spec
+
+    @workflow.query
+    def status(self) -> BundleStatus:
+        assert self._spec is not None
+        return BundleStatus(spec=self._spec, push=self._push, last_commit=self._last_commit)
+
+
+def _now() -> str:
+    return workflow.now().isoformat(timespec="seconds")
 
 
 @workflow.defn

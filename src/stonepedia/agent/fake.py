@@ -1,7 +1,7 @@
 """Deterministic stand-in for the proposing agent, used in tests and offline UI work.
 
 - propose: turns the Source's text.md into one new Guidance Article under `notes/`
-  (a Request aimed at Articles appends to those instead).
+  (a Request aimed at Articles appends to those instead; "RETIRE..." deletes them).
 - revise: appends the feedback to each target Article.
 - feedback: appends the feedback to every pending Article; "DELETE" withdraws them instead.
 """
@@ -25,7 +25,9 @@ def run(workspace: Path, job: AgentJob) -> str:
         if job.request_targets:
             for rel in job.request_targets:
                 target = workspace / rel
-                if target.exists():
+                if text.startswith("RETIRE"):
+                    target.unlink(missing_ok=True)
+                elif target.exists():
                     target.write_text(target.read_text().rstrip("\n") + f"\n\nRequested: {text}\n")
             return f"Applied the Request to {', '.join(job.request_targets)}."
         path = workspace / "notes" / f"{_slug(job.title, job.proposal_id)}.md"

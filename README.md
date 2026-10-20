@@ -5,7 +5,7 @@ Submit a Source → an agent proposes Article changes → a human accepts, revis
 
 Vocabulary: [CONTEXT.md](CONTEXT.md) · Decisions: [docs/adr](docs/adr) · Plan: [docs/plan.md](docs/plan.md)
 
-> Status: phase 3 of 6. Proposals are written by Claude Code from pasted text, files (PDF, Word, PowerPoint, Excel, HTML, images), intranet links and Requests. Templates, git remotes and maintenance come in later phases ([plan](docs/plan.md)).
+> Status: phase 4 of 6. Claude Code writes Proposals from text, files (PDF, Word, PowerPoint, Excel, HTML, images), intranet links and Requests; Bundles are git repos (new or cloned, optionally a subfolder) that push to a remote, with an editable Template. Maintenance checks and offline packaging come next ([plan](docs/plan.md)).
 
 ## Run it
 
@@ -32,6 +32,8 @@ Then open **Settings** and put your LLM endpoint into the Claude settings file, 
 ```
 
 Press **Test agent** to check it. The file is passed to `claude --settings`; any Claude Code setting works there.
+
+Create a Bundle under **Bundles**: start empty (optionally with a git URL to push to, e.g. an empty GitLab project) or use an existing repository and the folder its Articles live in. If pushing needs a token, put it in the URL (`http://user:token@gitlab.intra/group/repo.git`); it is never shown back in the UI.
 
 Data lives in Docker volumes (`stonepedia_data` for Bundles, `stonepedia_pgdata` for Temporal). `docker compose down` keeps them.
 

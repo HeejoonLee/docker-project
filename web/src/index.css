@@ -171,3 +171,13 @@ tr.selected td { background: var(--bg); }
 .targets legend { font-weight: 600; padding: 0 4px; }
 .source-image { max-width: 100%; max-height: 480px; border: 1px solid var(--border); border-radius: var(--radius); }
 .source summary { overflow-wrap: anywhere; }
+.page-tabs { padding: 0; margin: 8px 0 16px; border-bottom: 1px solid var(--border); }
+.push-ok { color: var(--ok); margin: 4px 0 0; }
+tr.retired td { color: var(--muted); text-decoration: line-through; }
+.template-editor { display: flex; flex-direction: column; gap: 10px; }
+.template-editor label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.row-card { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.fields input:not([type=checkbox]) { width: 100%; }
+.fields input.wide { min-width: 240px; }
+.sticky-actions { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; }

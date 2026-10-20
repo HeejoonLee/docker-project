@@ -51,4 +51,7 @@ def finalize(content: str, base_content: str | None, generated: dict, source_ent
         meta["sources"] = sources
     meta["status"] = "proposed"
     meta["generated"] = generated
+    # Keep fields where the previous version had them, so diffs show only real changes.
+    order = [k for k in base_meta if k in meta] + [k for k in meta if k not in base_meta]
+    meta = {k: meta[k] for k in order}
     return join(meta, body if body.startswith("\n") else "\n" + body)

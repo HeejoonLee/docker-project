@@ -21,3 +21,10 @@ def test_finalize_rewrites_system_fields_and_keeps_unknown_ones():
 
 def test_split_without_frontmatter():
     assert frontmatter.split("# Just text\n") == ({}, "# Just text\n")
+
+
+def test_finalize_keeps_field_order_of_previous_version():
+    base = frontmatter.join({"type": "Guidance", "status": "accepted", "title": "T", "x": 1, "review": {}}, "\n")
+    written = frontmatter.join({"title": "T2", "type": "Guidance", "x": 1, "new": True}, "\n")
+    meta, _ = frontmatter.split(frontmatter.finalize(written, base, {"by": "a", "at": "t"}))
+    assert list(meta) == ["type", "status", "title", "x", "new", "generated"]

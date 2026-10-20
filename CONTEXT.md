@@ -9,7 +9,7 @@ All Bundles managed by one Stonepedia deployment.
 _Avoid_: KB repo, wiki, corpus
 
 **Bundle**:
-One project's accepted Articles and Sources, kept as its own git repository with its own remote (e.g. GitLab) and its own Template.
+One project's accepted Articles and Sources, kept in its own git repository (the whole repository or one folder of it) with its own remote (e.g. GitLab) and its own Template.
 _Avoid_: Collection, space, project folder
 
 **Template**:
@@ -38,8 +38,12 @@ _Avoid_: Prompt, ticket
 The state of an Article change whose underlying Article has changed since the change was produced. It cannot be accepted until it is revised or edited.
 
 **Article change**:
-One element of a Proposal: creating or updating a single Article. Each is decided on independently.
+One element of a Proposal: creating, updating or retiring a single Article. Each is decided on independently.
 _Avoid_: Diff, patch, item
+
+**Retire**:
+An Article change that marks an Article obsolete. The file stays in the Bundle with status `retired`, so links and history keep working.
+_Avoid_: Delete, archive
 
 **Accept**:
 The decision that commits an Article change into the knowledge base. All Article changes accepted together in one Proposal form a single commit.

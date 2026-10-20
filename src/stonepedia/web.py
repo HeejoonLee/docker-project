@@ -14,13 +14,24 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from temporalio.client import Client, WorkflowUpdateFailedError
+from temporalio.client import Client, WorkflowFailureError, WorkflowQueryFailedError, WorkflowUpdateFailedError
 from temporalio.common import SearchAttributePair, TypedSearchAttributes, WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError
 
-from stonepedia import appconfig, config, frontmatter, git, search
-from stonepedia.models import AgentCheck, BundleRun, BundleSpec, ProposalInput, ProposalView, SourceInput
+from stonepedia import appconfig, bundle, config, git, search
+from stonepedia.bundle import BundleSettings, Template
+from stonepedia.models import (
+    AgentCheck,
+    BundleConfigUpdate,
+    BundleRun,
+    BundleSpec,
+    BundleStatus,
+    ProposalInput,
+    ProposalView,
+    PushState,
+    SourceInput,
+)
 from stonepedia.sources import SUPPORTED_EXTS
 from stonepedia.temporal import connect
 from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, ProposalWorkflow
@@ -62,14 +73,35 @@ class BundleSummary(BaseModel):
 
 class ArticleSummary(BaseModel):
     path: str
+    id: str
     title: str
     type: str
     status: str
 
 
-class BundleDetail(BundleSummary):
+class BundleDetail(BaseModel):
+    slug: str
+    name: str
+    settings: BundleSettings
+    root: str
+    remote_url: str  # with any embedded token hidden
+    branch: str
+    clone_url: str
+    push: PushState
     head: str | None
     articles: list[ArticleSummary]
+
+
+class BundleSettingsBody(BaseModel):
+    editor: str
+    settings: BundleSettings
+    remote_url: str
+    branch: str
+
+
+class TemplateBody(BaseModel):
+    editor: str
+    template: Template
 
 
 @app.get("/api/config")
@@ -98,59 +130,121 @@ async def list_bundles(request: Request) -> list[BundleSummary]:
 async def create_bundle(spec: BundleSpec, request: Request) -> BundleSummary:
     if (_settings(request).bundles_dir / spec.slug).exists():
         raise HTTPException(409, f"A Bundle folder named '{spec.slug}' already exists.")
+    spec.clone_url = spec.clone_url.strip()
+    spec.remote_url = spec.remote_url.strip()
     try:
         handle = await _client(request).start_workflow(
             BundleWorkflow.run,
             BundleRun(spec=spec),
             id=f"bundle-{spec.slug}",
             task_queue=config.TASK_QUEUE,
-            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,
             id_conflict_policy=WorkflowIDConflictPolicy.FAIL,
             memo={"name": spec.name, "language": spec.language},
         )
     except WorkflowAlreadyStartedError:
         raise HTTPException(409, f"A Bundle named '{spec.slug}' already exists.")
-    await _update(handle.execute_update(BundleWorkflow.wait_ready))
+    try:
+        await handle.execute_update(BundleWorkflow.wait_ready)
+    except (WorkflowUpdateFailedError, RPCError):
+        try:
+            await handle.result()
+        except WorkflowFailureError as err:
+            raise HTTPException(422, f"Could not create the Bundle: {_root_cause(err)}")
+        raise
     return BundleSummary(slug=spec.slug, name=spec.name, language=spec.language, created_at=None)
+
+
+async def _bundle_status(request: Request, slug: str) -> BundleStatus:
+    try:
+        return await _client(request).get_workflow_handle(f"bundle-{slug}").query(BundleWorkflow.status)
+    except (RPCError, WorkflowQueryFailedError):
+        raise HTTPException(404, "No such Bundle.")
 
 
 @app.get("/api/bundles/{slug}")
 async def get_bundle(slug: str, request: Request) -> BundleDetail:
-    try:
-        spec = await _client(request).get_workflow_handle(f"bundle-{slug}").query(BundleWorkflow.info)
-    except RPCError:
-        raise HTTPException(404, "No such Bundle.")
-    if spec is None:
-        raise HTTPException(404, "No such Bundle.")
+    status = await _bundle_status(request, slug)
+    spec = status.spec
     repo = _settings(request).bundles_dir / slug
-    head = git.head(repo) if (repo / ".git").exists() else None
-    articles = []
-    if head:
-        for path in sorted(repo.rglob("*.md")):
-            rel = path.relative_to(repo).as_posix()
-            if rel in ("index.md", "README.md") or rel.startswith((".stonepedia/", "sources/", ".git/")):
-                continue
-            meta, _ = frontmatter.split(path.read_text())
-            articles.append(
-                ArticleSummary(
-                    path=rel,
-                    title=str(meta.get("title", rel)),
-                    type=str(meta.get("type", "")),
-                    status=str(meta.get("status", "")),
-                )
-            )
+    root = repo / spec.root
+    settings = bundle.load_settings(root)
+    articles = [
+        ArticleSummary(
+            path=rel,
+            id=str(bundle.get_field(meta, settings.id_field) or ""),
+            title=str(meta.get("title", rel)),
+            type=str(meta.get("type", "")),
+            status=str(meta.get("status", "")),
+        )
+        for rel, meta in bundle.articles(root)
+    ]
     return BundleDetail(
-        slug=slug, name=spec.name, language=spec.language, created_at=None, head=head, articles=articles
+        slug=slug,
+        name=settings.name,
+        settings=settings,
+        root=spec.root,
+        remote_url=git.redact(spec.remote_url),
+        branch=spec.branch,
+        clone_url=git.redact(spec.clone_url),
+        push=status.push,
+        head=git.head(repo) if (repo / ".git").exists() else None,
+        articles=articles,
     )
+
+
+@app.put("/api/bundles/{slug}/settings")
+async def put_bundle_settings(slug: str, body: BundleSettingsBody, request: Request) -> BundleDetail:
+    status = await _bundle_status(request, slug)
+    remote = body.remote_url.strip()
+    if remote == git.redact(status.spec.remote_url):
+        remote = status.spec.remote_url  # unchanged (the UI only ever sees the redacted form)
+    update = BundleConfigUpdate(
+        editor=body.editor.strip() or "anonymous",
+        settings=body.settings,
+        remote_url=remote if remote != status.spec.remote_url else None,
+        branch=body.branch.strip() if body.branch.strip() != status.spec.branch else None,
+    )
+    await _update(_client(request).get_workflow_handle(f"bundle-{slug}").execute_update(BundleWorkflow.save_config, update))
+    return await get_bundle(slug, request)
+
+
+@app.get("/api/bundles/{slug}/template")
+async def get_template(slug: str, request: Request, inferred: bool = False) -> Template:
+    status = await _bundle_status(request, slug)
+    root = _settings(request).bundles_dir / slug / status.spec.root
+    return bundle.infer_template(root) if inferred else bundle.load_template(root)
+
+
+@app.put("/api/bundles/{slug}/template")
+async def put_template(slug: str, body: TemplateBody, request: Request) -> Template:
+    await _bundle_status(request, slug)
+    update = BundleConfigUpdate(editor=body.editor.strip() or "anonymous", template=body.template)
+    await _update(_client(request).get_workflow_handle(f"bundle-{slug}").execute_update(BundleWorkflow.save_config, update))
+    return body.template
+
+
+@app.post("/api/bundles/{slug}/push")
+async def retry_push(slug: str, request: Request) -> PushState:
+    await _bundle_status(request, slug)
+    status = await _update(_client(request).get_workflow_handle(f"bundle-{slug}").execute_update(BundleWorkflow.retry_push))
+    return status.push
 
 
 @app.get("/api/bundles/{slug}/articles/{path:path}")
 async def get_article(slug: str, path: str, request: Request) -> dict:
-    repo = (_settings(request).bundles_dir / slug).resolve()
-    target = (repo / path).resolve()
-    if not target.is_relative_to(repo) or not target.is_file() or target.suffix != ".md":
+    status = await _bundle_status(request, slug)
+    root = (_settings(request).bundles_dir / slug / status.spec.root).resolve()
+    target = (root / path).resolve()
+    if not target.is_relative_to(root) or not target.is_file() or target.suffix != ".md":
         raise HTTPException(404, "No such Article.")
     return {"path": path, "content": target.read_text()}
+
+
+def _root_cause(err: BaseException) -> str:
+    while err.__cause__ is not None:
+        err = err.__cause__
+    return getattr(err, "message", None) or str(err)
 
 
 # ---------- Proposals ----------

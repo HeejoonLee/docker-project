@@ -31,7 +31,7 @@ def git(repo: Path, *args: str, check: bool = True) -> str:
         env=_ENV,
     )
     if check and proc.returncode != 0:
-        raise GitError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
+        raise GitError(redact(f"git {' '.join(args)} failed: {proc.stderr.strip()}"))
     return proc.stdout
 
 
@@ -93,3 +93,79 @@ def commit_all(repo: Path, message: str, author: tuple[str, str]) -> str:
         "commit", "-q", "-m", message,
     )
     return head(repo)
+
+
+def deleted_paths(repo: Path) -> list[str]:
+    """Tracked paths deleted in the working tree."""
+    out = git(repo, "status", "--porcelain", "-z")
+    return sorted(e[3:] for e in out.split("\0") if e and "D" in e[:2])
+
+
+def clone(url: str, dest: Path, branch: str = "") -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    args = ["clone", "-q"]
+    if branch:
+        args += ["-b", branch]
+    git(dest.parent, *args, url, str(dest))
+
+
+def current_branch(repo: Path) -> str:
+    return git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
+
+
+def set_remote(repo: Path, url: str) -> None:
+    if git(repo, "remote", check=False).split().count("origin"):
+        if url:
+            git(repo, "remote", "set-url", "origin", url)
+        else:
+            git(repo, "remote", "remove", "origin")
+    elif url:
+        git(repo, "remote", "add", "origin", url)
+
+
+def sync(repo: Path, branch: str) -> None:
+    """Fetch origin and rebase local commits on top of it.
+
+    Raises GitError (after aborting the rebase, so nothing is lost) when they conflict.
+    """
+    git(repo, "fetch", "-q", "origin")
+    if blob_ref(repo, f"origin/{branch}") is None:
+        return  # first push will create the remote branch
+    try:
+        git(repo, "-c", "user.name=Stonepedia", "-c", "user.email=stonepedia@stonepedia.local",
+            "rebase", "-q", f"origin/{branch}")
+    except GitError:
+        if _rebasing(repo):
+            git(repo, "rebase", "--abort", check=False)
+        raise GitError(
+            f"Local commits conflict with changes on origin/{branch}. They stay here unpushed; "
+            "resolve the conflict with a git client."
+        ) from None
+
+
+def _rebasing(repo: Path) -> bool:
+    gitdir = Path(git(repo, "rev-parse", "--absolute-git-dir").strip())
+    return (gitdir / "rebase-merge").exists() or (gitdir / "rebase-apply").exists()
+
+
+def blob_ref(repo: Path, ref: str) -> str | None:
+    out = git(repo, "rev-parse", "-q", "--verify", ref, check=False).strip()
+    return out or None
+
+
+def push(repo: Path, branch: str) -> None:
+    git(repo, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+
+
+def ahead_count(repo: Path, branch: str) -> int:
+    """Local commits not on origin/<branch> (all commits if the remote branch is unknown)."""
+    if blob_ref(repo, f"origin/{branch}") is None:
+        return int(git(repo, "rev-list", "--count", "HEAD").strip())
+    return int(git(repo, "rev-list", "--count", f"origin/{branch}..HEAD").strip())
+
+
+def redact(url: str) -> str:
+    """Hide a password/token embedded in a remote URL."""
+    import re
+
+    return re.sub(r"(://[^/@:]+):[^/@]+@", r"\1:***@", url)

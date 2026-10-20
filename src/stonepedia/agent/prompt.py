@@ -61,6 +61,8 @@ def _rules() -> str:
             "Use lowercase ASCII kebab-case file and folder names ending in `.md`.",
             "- Every Article starts with YAML frontmatter between `---` lines, followed by the body.",
             "- When updating an Article, keep frontmatter fields you do not recognize exactly as they are.",
+            "- To retire an Article that is obsolete or fully merged into another, delete its file; "
+            "the system keeps it in the knowledge base marked as retired. Never delete Articles for any other reason.",
             "- Base every claim on the material provided or on the existing Articles. "
             "Mark assumptions and unknowns explicitly; never invent values.",
         ]
