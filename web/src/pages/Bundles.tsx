@@ -108,7 +108,7 @@ export default function Bundles() {
         {bundles.data?.map((b) => (
           <li key={b.slug} className="card">
             <Link to={`/bundles/${b.slug}`}><strong>{b.name}</strong></Link>
-            <span className="muted"> · {b.slug} · {b.language} {b.created_at && `· ${formatTime(b.created_at)}`}</span>
+            <div className="muted small">{b.slug} · {b.language}{b.created_at && ` · ${formatTime(b.created_at)}`}</div>
           </li>
         ))}
       </ul>

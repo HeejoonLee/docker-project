@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { useConfig } from './config'
 import { LOCALES, useI18n } from './i18n'
 import BundlePage from './pages/BundlePage'
@@ -39,22 +39,28 @@ function Header() {
   const { t, lang, setLang } = useI18n()
   const { name, setName } = useUser()
   const config = useConfig()
+  const { pathname } = useLocation()
+  const inInbox = pathname === '/' || pathname.startsWith('/proposals/')
   return (
     <header className="topbar">
-      <NavLink to="/" className="brand">Stonepedia</NavLink>
+      <NavLink to="/" className="brand"><img src="/favicon.svg" alt="" />Stonepedia</NavLink>
       <nav>
-        <NavLink to="/" end>{t('nav.inbox')}</NavLink>
+        <NavLink to="/" className={() => (inInbox ? 'active' : '')}>{t('nav.inbox')}</NavLink>
         <NavLink to="/new">{t('nav.new')}</NavLink>
         <NavLink to="/bundles">{t('nav.bundles')}</NavLink>
         <NavLink to="/maintenance">{t('nav.maintenance')}</NavLink>
         <NavLink to="/settings">{t('nav.settings')}</NavLink>
       </nav>
       <div className="topbar-right">
-        {config && <a href={config.temporal_ui_url} target="_blank" rel="noreferrer">{t('nav.temporal')} ↗</a>}
+        {config && <a className="ghost" href={config.temporal_ui_url} target="_blank" rel="noreferrer">{t('nav.temporal')} ↗</a>}
         <select aria-label="Language" value={lang} onChange={(e) => setLang(e.target.value)}>
           {Object.entries(LOCALES).map(([code, l]) => <option key={code} value={code}>{l.label}</option>)}
         </select>
-        {name && <button className="link" title={t('user.change')} onClick={() => setName('')}>{name}</button>}
+        {name && (
+          <button className="user-chip" title={t('user.change')} onClick={() => setName('')}>
+            <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>{name}
+          </button>
+        )}
       </div>
     </header>
   )

@@ -101,7 +101,7 @@ docker compose start
 | --- | --- |
 | Page does not load | `docker compose ps`; `docker compose logs web temporal` |
 | "Test agent" fails | The message shows Claude's error. Check the gateway URL, token and model in Settings. |
-| Proposal fails | Open it: the error is shown at the top. **Open in Temporal** shows every step. |
+| Proposal fails | Open it: the error is shown at the top. **Temporal UI** (top right) shows every step of workflow `proposal-<id>`. |
 | "Push failed" on a Bundle | The message is from git. Fix the URL or token in the Bundle's Settings, then **Retry push**. |
 | Port already in use | Change `STONEPEDIA_PORT` in `.env`, then `docker compose up -d`. |
 

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, type ArticleChange, type Decision, type Proposal } from '../api'
-import { useConfig } from '../config'
 import { useI18n } from '../i18n'
 import { DiffView } from '../diff'
 import { ArticleView, Markdown } from '../markdown'
@@ -15,7 +14,6 @@ export default function ProposalPage() {
   const { id = '' } = useParams()
   const { t } = useI18n()
   const { name } = useUser()
-  const config = useConfig()
   const { data: p, error, setData } = usePoll(() => api.proposal(id), id, 2000, (d) => !d || BUSY.has(d.state))
   const [actionError, setActionError] = useState<unknown>()
   const [feedback, setFeedback] = useState('')
@@ -48,7 +46,6 @@ export default function ProposalPage() {
     requestAnimationFrame(() => document.getElementById(`change-${cid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
   const decided = p.changes.filter((c) => c.decision !== 'pending').length
-  const temporalLink = config && `${config.temporal_ui_url}/namespaces/${config.namespace}/workflows/proposal-${p.id}`
 
   return (
     <section>
@@ -60,7 +57,6 @@ export default function ProposalPage() {
             {p.runs > 0 && <> · {t('proposal.cost', { runs: String(p.runs), cost: p.cost_usd.toFixed(2) })}</>}
           </p>
         </div>
-        {temporalLink && <a className="small" href={temporalLink} target="_blank" rel="noreferrer">{t('proposal.openTemporal')} ↗</a>}
       </div>
 
       <SourceCard p={p} />
