@@ -15,7 +15,7 @@ export interface ArticleChange {
   history: { content: string; replaced_by: 'revise' | 'edit' | 'feedback'; note: string; by: string; at: string }[]
 }
 
-export type SourceKind = 'text' | 'file' | 'link' | 'request'
+export type SourceKind = 'text' | 'file' | 'link' | 'request' | 'audit'
 
 export interface SourceInfo {
   id: string

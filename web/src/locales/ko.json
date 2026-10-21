@@ -218,5 +218,15 @@
   "mt.day.5": "금요일",
   "mt.day.6": "토요일",
   "mt.sev.error": "오류",
-  "mt.sev.warning": "경고"
+  "mt.sev.warning": "경고",
+  "fm.properties": "전체 속성 ({count})",
+  "proposal.overview": "Article 변경 {count}건",
+  "proposal.expandAll": "모두 펼치기",
+  "proposal.collapseAll": "모두 접기",
+  "proposal.expand": "펼치기",
+  "proposal.collapse": "접기",
+  "proposal.pending": "검토 전",
+  "proposal.staleShort": "오래됨",
+  "proposal.decidedCount": "{total}건 중 {done}건 결정",
+  "proposal.sourceKind.audit": "AI 점검"
 }
