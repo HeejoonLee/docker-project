@@ -21,7 +21,7 @@ cp .env.example .env                  # change ports or time zone here if needed
 docker compose up -d
 ```
 
-Open `http://<server>:8080`. The first start takes about a minute while Temporal
+Open `http://<server>:8080` (the Temporal UI is at `/temporal/` on the same port). The first start takes about a minute while Temporal
 sets up its database. `docker compose ps` shows `web` as `healthy` when ready.
 
 ## First-time setup (in the browser)
@@ -103,6 +103,6 @@ docker compose start
 | "Test agent" fails | The message shows Claude's error. Check the gateway URL, token and model in Settings. |
 | Proposal fails | Open it: the error is shown at the top. **Open in Temporal** shows every step. |
 | "Push failed" on a Bundle | The message is from git. Fix the URL or token in the Bundle's Settings, then **Retry push**. |
-| Port already in use | Change `STONEPEDIA_PORT` / `TEMPORAL_UI_PORT` in `.env`, then `docker compose up -d`. |
+| Port already in use | Change `STONEPEDIA_PORT` in `.env`, then `docker compose up -d`. |
 
 Logs: `docker compose logs -f web worker`.

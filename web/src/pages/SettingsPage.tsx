@@ -35,7 +35,7 @@ export default function SettingsPage() {
       await api.saveSettings(settings)
       setCheck(await api.testAgent())
     } catch (err) {
-      setCheck({ ok: false, message: (err as Error).message, agent: settings.app.agent, seconds: 0 })
+      setCheck({ ok: false, message: (err as Error).message, agent: 'claude-code', seconds: 0 })
     }
   }
 
@@ -44,13 +44,6 @@ export default function SettingsPage() {
       <h1>{t('settings.title')}</h1>
       <ErrorBox error={error} />
       <div className="form">
-        <label>
-          {t('settings.agent')}
-          <select value={settings.app.agent} onChange={(e) => update({ agent: e.target.value as Settings['app']['agent'] })}>
-            <option value="claude-cli">{t('settings.agent.claude')}</option>
-            <option value="fake">{t('settings.agent.fake')}</option>
-          </select>
-        </label>
         <label>
           {t('settings.timeout')}
           <input

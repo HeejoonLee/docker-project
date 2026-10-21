@@ -8,7 +8,7 @@ import pytest_asyncio
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 
-from stonepedia import appconfig, search
+from stonepedia import search
 from stonepedia.config import Settings
 from stonepedia.worker import build_worker
 
@@ -25,12 +25,11 @@ async def env():
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    appconfig.save(tmp_path / "config", appconfig.AppConfig(agent="fake"))
     return Settings(
         temporal_address="unused",
         namespace="default",
         data_dir=tmp_path,
-        temporal_ui_url="",
+        agent="fake",
     )
 
 

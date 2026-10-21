@@ -64,13 +64,13 @@ async def test_duplicate_and_invalid_bundles_rejected(http, uid):
 
 async def test_settings_roundtrip_and_validation(http):
     r = await http.get("/api/settings")
-    assert r.status_code == 200 and r.json()["app"]["agent"] == "fake"
-    bad = {"app": {"agent": "claude-cli", "agent_timeout_minutes": 30}, "claude_settings": "{not json"}
+    assert r.status_code == 200 and "agent" not in r.json()["app"]  # the agent is not user-selectable
+    bad = {"app": {"agent_timeout_minutes": 30}, "claude_settings": "{not json"}
     assert (await http.put("/api/settings", json=bad)).status_code == 422
-    good = {"app": {"agent": "claude-cli", "agent_timeout_minutes": 30}, "claude_settings": '{"model": "x"}'}
+    good = {"app": {"agent_timeout_minutes": 30}, "claude_settings": '{"model": "x"}'}
     assert (await http.put("/api/settings", json=good)).status_code == 200
     r = (await http.get("/api/settings")).json()
-    assert r["app"]["agent"] == "claude-cli" and r["app"]["agent_timeout_minutes"] == 30
+    assert r["app"]["agent_timeout_minutes"] == 30
     assert r["claude_settings"].strip() == '{"model": "x"}'
 
 
@@ -142,7 +142,7 @@ async def _wait(http, pid, state):
     raise AssertionError(f"{view['state']}: {view.get('error')}")
 
 
-async def test_config_derives_temporal_ui_from_host_and_health(http):
-    r = (await http.get("/api/config", headers={"host": "kb.intra:8080"})).json()
-    assert r["temporal_ui_url"] == "http://kb.intra:8233"
+async def test_config_points_at_proxied_temporal_ui_and_health(http):
+    r = (await http.get("/api/config")).json()
+    assert r == {"temporal_ui_url": "/temporal", "namespace": "default"}
     assert (await http.get("/api/health")).json() == {"ok": True}

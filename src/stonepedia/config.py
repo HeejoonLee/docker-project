@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 TASK_QUEUE = "stonepedia"
 
@@ -12,8 +13,8 @@ class Settings:
     temporal_address: str
     namespace: str
     data_dir: Path
-    temporal_ui_url: str  # empty: same host as the web app, on temporal_ui_port
-    temporal_ui_port: int = 8233
+    temporal_ui_upstream: str = "http://localhost:8233"  # where the web app proxies /temporal/ to
+    agent: Literal["claude-cli", "fake"] = "claude-cli"  # "fake" is for tests only
     timezone: str = "Asia/Seoul"  # for maintenance schedules
 
     @property
@@ -43,7 +44,7 @@ def load() -> Settings:
         temporal_address=os.environ.get("STONEPEDIA_TEMPORAL_ADDRESS", "localhost:7233"),
         namespace=os.environ.get("STONEPEDIA_NAMESPACE", "default"),
         data_dir=Path(os.environ.get("STONEPEDIA_DATA_DIR", ".data")).resolve(),
-        temporal_ui_url=os.environ.get("STONEPEDIA_TEMPORAL_UI_URL", ""),
-        temporal_ui_port=int(os.environ.get("STONEPEDIA_TEMPORAL_UI_PORT", "8233")),
+        temporal_ui_upstream=os.environ.get("STONEPEDIA_TEMPORAL_UI_UPSTREAM", "http://localhost:8233"),
         timezone=os.environ.get("STONEPEDIA_TIMEZONE", "Asia/Seoul"),
+        agent="fake" if os.environ.get("STONEPEDIA_AGENT") == "fake" else "claude-cli",
     )

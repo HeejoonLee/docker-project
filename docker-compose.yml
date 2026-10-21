@@ -13,8 +13,7 @@ x-app: &app
   restart: unless-stopped
   environment:
     STONEPEDIA_TEMPORAL_ADDRESS: temporal:7233
-    STONEPEDIA_TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-}
-    STONEPEDIA_TEMPORAL_UI_PORT: ${TEMPORAL_UI_PORT:-8233}
+    STONEPEDIA_TEMPORAL_UI_UPSTREAM: http://temporal-ui:8080
     STONEPEDIA_TIMEZONE: ${TIMEZONE:-Asia/Seoul}
   volumes:
     - data:/data
@@ -81,8 +80,9 @@ services:
     restart: unless-stopped
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-    ports:
-      - "${TEMPORAL_UI_PORT:-8233}:8080"
+      # Served to users through the web app at /temporal/ (docs/adr/0005).
+      TEMPORAL_UI_PUBLIC_PATH: /temporal
+      TEMPORAL_DISABLE_NEWS_FETCH: "true"
     depends_on:
       temporal:
         condition: service_healthy

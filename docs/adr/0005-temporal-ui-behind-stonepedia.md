@@ -1,0 +1,5 @@
+# The Temporal UI is served through the web app at /temporal/, not on its own port
+
+The stock Temporal Web UI runs inside the stack with its public path set to `/temporal`, and the Stonepedia web app reverse-proxies `/temporal/*` to it. Only one port (8080) is published. We chose this after the UI's own port (8233, Temporal's default) silently collided with a developer's local `temporal server start-dev`: Docker on WSL published the port anyway, the browser reached the other server, and every "Open in Temporal" link 404'd while showing someone else's workflows. A single port removes that whole class of mix-up, gives the company deployment one port to open, and lets links be relative (`/temporal/namespaces/…`) so they are correct for any host name.
+
+The UI keeps its write actions (terminate, cancel, signal, reset) for operators to explore, so anyone who can reach Stonepedia can also kill a workflow from there ([0003](0003-no-authentication.md) applies). Reverting means re-publishing the UI's port and pointing the links at it.

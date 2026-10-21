@@ -1,21 +1,15 @@
 """Machine settings edited on the web Settings page, stored under <data>/config/.
 
-- app.json: which agent proposes changes, and its time limit.
+- app.json: the agent's time limit and Source limits.
 - claude-settings.json: passed verbatim to `claude --settings` (endpoint, token, model...).
 """
 
 import json
 import os
 from pathlib import Path
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
-AgentKind = Literal["claude-cli", "fake"]
-
-
 class AppConfig(BaseModel):
-    agent: AgentKind = "claude-cli"
     agent_timeout_minutes: int = Field(default=60, ge=1, le=600)
     max_source_mb: int = Field(default=50, ge=1, le=2000)
     verify_link_certificates: bool = False  # intranet sites often use private CAs

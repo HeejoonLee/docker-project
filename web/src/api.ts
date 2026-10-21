@@ -101,7 +101,6 @@ export interface NewBundle {
 export interface AppConfig { temporal_ui_url: string; namespace: string }
 export interface Settings {
   app: {
-    agent: 'claude-cli' | 'fake'
     agent_timeout_minutes: number
     max_source_mb: number
     verify_link_certificates: boolean

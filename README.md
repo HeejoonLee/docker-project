@@ -36,7 +36,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Stonepedia: http://localhost:8080 · Temporal UI: http://localhost:8233
+Stonepedia: http://localhost:8080 · Temporal UI: http://localhost:8080/temporal/
 
 To let the Docker worker use your own Claude login on a development machine, create a git-ignored `docker-compose.override.yml`:
 

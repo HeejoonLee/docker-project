@@ -200,7 +200,7 @@ class Activities:
         try:
             staged = self.settings.sources_dir / job.source.id
             stale_targets = await asyncio.to_thread(_prepare_workspace, ws_root, job, staged)
-            if cfg.agent == "fake":
+            if self.settings.agent == "fake":
                 summary, cost, agent_name = fake.run(ws_root, job), None, "fake-agent"
             else:
                 settings = bundle.load_settings(ws_root)
@@ -228,7 +228,7 @@ class Activities:
         """Ask the configured agent for a trivial reply, to test the Settings page configuration."""
         cfg = appconfig.load(self.settings.config_dir)
         started = time.monotonic()
-        if cfg.agent == "fake":
+        if self.settings.agent == "fake":
             return AgentCheck(ok=True, message="The fake agent is selected; nothing to test.", agent="fake", seconds=0)
         with tempfile.TemporaryDirectory() as tmp:
             try:
@@ -243,7 +243,7 @@ class Activities:
                 message = reply if ok else f"Unexpected reply: {reply}"
             except (AgentError, AgentConfigError) as err:
                 ok, message = False, str(err)
-        return AgentCheck(ok=ok, message=message, agent=cfg.agent, seconds=round(time.monotonic() - started, 1))
+        return AgentCheck(ok=ok, message=message, agent=self.settings.agent, seconds=round(time.monotonic() - started, 1))
 
     def _claude_settings_file(self) -> Path:
         path = appconfig.claude_settings_path(self.settings.config_dir)

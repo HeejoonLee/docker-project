@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom'
 import { api, type ArticleChange, type Decision, type Proposal } from '../api'
 import { useConfig } from '../config'
 import { useI18n } from '../i18n'
-import { ArticleView, DiffView } from '../markdown'
+import { DiffView } from '../diff'
+import { ArticleView, Markdown } from '../markdown'
 import { ErrorBox, StateBadge, formatTime } from '../ui'
 import { usePoll } from '../usePoll'
 import { useUser } from '../user'
@@ -74,7 +75,7 @@ export default function ProposalPage() {
       {p.summary && (
         <details className="summary" open={reviewable}>
           <summary>{t('proposal.summary')}</summary>
-          <pre>{p.summary}</pre>
+          <div className="summary-body"><Markdown text={p.summary} /></div>
         </details>
       )}
 
@@ -232,14 +233,18 @@ function ChangeCard({ change, index, total, open, onToggle, editable, onDecide, 
   return (
     <article id={`change-${change.id}`} className={`change decision-${change.decision}${change.stale ? ' stale' : ''}${open ? '' : ' collapsed'}`}>
       <header>
-        <div>
+        <div className="change-title">
           <button className="link fold" onClick={onToggle} aria-expanded={open} title={open ? t('proposal.collapse') : t('proposal.expand')}>
             {open ? '▾' : '▸'} <span className="muted small">{index} / {total}</span>
           </button>
           <span className={`kind kind-${change.kind}`}>{t(`proposal.kind.${change.kind}`)}</span>
-          <strong>{change.title}</strong>
-          <code className="path">{change.path}</code>
-          {change.edited_by && <span className="muted small">{t('proposal.editedBy', { name: change.edited_by })}</span>}
+          <div className="change-name">
+            <strong>{change.title}</strong>
+            <div>
+              <code className="path">{change.path}</code>
+              {change.edited_by && <span className="muted small"> · {t('proposal.editedBy', { name: change.edited_by })}</span>}
+            </div>
+          </div>
         </div>
         <div className="decide">
           {pending ? (

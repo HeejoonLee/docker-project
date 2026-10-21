@@ -20,7 +20,9 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.api.workflowservice.v1 import GetSystemInfoRequest
 from temporalio.service import RPCError
 
-from stonepedia import appconfig, bundle, config, git, schedules, search
+import httpx
+
+from stonepedia import appconfig, bundle, config, git, schedules, search, temporal_ui
 from stonepedia.bundle import BundleSettings, Template
 from stonepedia.models import (
     AgentCheck,
@@ -47,10 +49,13 @@ STATIC_DIR = Path(__file__).resolve().parents[2] / "web" / "dist"
 async def lifespan(app: FastAPI):
     app.state.settings = config.load()
     app.state.client = await connect(app.state.settings)
-    yield
+    async with httpx.AsyncClient(base_url=app.state.settings.temporal_ui_upstream, timeout=60) as ui:
+        app.state.temporal_ui = ui
+        yield
 
 
 app = FastAPI(title="Stonepedia", lifespan=lifespan)
+app.include_router(temporal_ui.router)
 
 
 def _client(request: Request) -> Client:
@@ -110,9 +115,7 @@ class TemplateBody(BaseModel):
 
 @app.get("/api/config")
 async def get_config(request: Request) -> dict:
-    settings = _settings(request)
-    ui = settings.temporal_ui_url or f"{request.url.scheme}://{request.url.hostname}:{settings.temporal_ui_port}"
-    return {"temporal_ui_url": ui.rstrip("/"), "namespace": settings.namespace}
+    return {"temporal_ui_url": temporal_ui.PREFIX, "namespace": _settings(request).namespace}
 
 
 @app.get("/api/health")

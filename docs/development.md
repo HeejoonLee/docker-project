@@ -27,4 +27,4 @@ Once deployed:
 
 ## Tests
 
-`make test` starts a local Temporal dev server through the Temporal CLI and uses the fake agent; the Claude runner is tested against a stub binary. One test imports `../knowledge` when that repo exists next to this one.
+`make test` starts a local Temporal dev server through the Temporal CLI and uses the fake agent (the `agent="fake"` test setting; `STONEPEDIA_AGENT=fake` does the same for a running stack, e.g. to click through the UI offline); the Claude runner is tested against a stub binary. One test imports `../knowledge` when that repo exists next to this one.

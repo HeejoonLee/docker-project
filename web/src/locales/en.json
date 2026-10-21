@@ -86,9 +86,6 @@
   "proposal.cost": "{runs} agent runs · ${cost}",
   "proposal.noChanges": "No changes left. Submit to close this Proposal, or send feedback to the agent.",
   "settings.title": "Settings",
-  "settings.agent": "Proposing agent",
-  "settings.agent.claude": "Claude Code (claude -p)",
-  "settings.agent.fake": "Fake agent (for testing; copies the text into one Article)",
   "settings.timeout": "Time limit per agent run (minutes)",
   "settings.claude": "Claude settings file",
   "settings.claudeHint": "Passed to claude --settings. Point it at your LLM endpoint here, e.g. {\"env\": {\"ANTHROPIC_BASE_URL\": \"http://llm.intra:4000\", \"ANTHROPIC_AUTH_TOKEN\": \"...\"}, \"model\": \"...\"}. Anyone who can open this page can read it.",
@@ -228,5 +225,7 @@
   "proposal.pending": "Pending",
   "proposal.staleShort": "Stale",
   "proposal.decidedCount": "{done} of {total} decided",
-  "proposal.sourceKind.audit": "AI audit"
+  "proposal.sourceKind.audit": "AI audit",
+  "diff.none": "No changes.",
+  "diff.unchanged": "{count} unchanged lines"
 }

@@ -86,9 +86,6 @@
   "proposal.cost": "에이전트 실행 {runs}회 · ${cost}",
   "proposal.noChanges": "남은 변경이 없습니다. 제출하여 제안을 닫거나 에이전트에게 피드백을 보내세요.",
   "settings.title": "설정",
-  "settings.agent": "제안 에이전트",
-  "settings.agent.claude": "Claude Code (claude -p)",
-  "settings.agent.fake": "가짜 에이전트 (테스트용; 본문을 문서 하나로 복사)",
   "settings.timeout": "에이전트 실행당 제한 시간 (분)",
   "settings.claude": "Claude 설정 파일",
   "settings.claudeHint": "claude --settings 로 전달됩니다. 여기에서 LLM 엔드포인트를 지정하세요. 예: {\"env\": {\"ANTHROPIC_BASE_URL\": \"http://llm.intra:4000\", \"ANTHROPIC_AUTH_TOKEN\": \"...\"}, \"model\": \"...\"}. 이 페이지를 열 수 있는 사람은 누구나 내용을 볼 수 있습니다.",
@@ -228,5 +225,7 @@
   "proposal.pending": "검토 전",
   "proposal.staleShort": "오래됨",
   "proposal.decidedCount": "{total}건 중 {done}건 결정",
-  "proposal.sourceKind.audit": "AI 점검"
+  "proposal.sourceKind.audit": "AI 점검",
+  "diff.none": "변경 없음.",
+  "diff.unchanged": "변경 없는 {count}줄"
 }

@@ -1,5 +1,6 @@
 """The Claude runner, exercised against a stub `claude` executable."""
 
+import dataclasses
 import json
 import stat
 
@@ -9,6 +10,11 @@ from helpers import start_bundle, start_proposal, wait_state
 from stonepedia import appconfig
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
+
+
+@pytest.fixture
+def settings(settings):
+    return dataclasses.replace(settings, agent="claude-cli")
 
 STUB = """#!/usr/bin/env python3
 import json, os, sys
@@ -36,7 +42,6 @@ def stub_claude(tmp_path, settings, monkeypatch):
     log = tmp_path / "stub-log.json"
     monkeypatch.setenv("STONEPEDIA_CLAUDE_BIN", str(stub))
     monkeypatch.setenv("STUB_LOG", str(log))
-    appconfig.save(settings.config_dir, appconfig.AppConfig(agent="claude-cli"))
     appconfig.save_claude_settings(settings.config_dir, '{"env": {"ANTHROPIC_BASE_URL": "http://llm.intra"}}')
     return log
 

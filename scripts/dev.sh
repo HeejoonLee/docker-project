@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 mkdir -p .dev
 export STONEPEDIA_DATA_DIR="$PWD/.dev/data"
 export STONEPEDIA_TEMPORAL_ADDRESS=localhost:7243
-export STONEPEDIA_TEMPORAL_UI_URL=http://localhost:8243
+export STONEPEDIA_TEMPORAL_UI_UPSTREAM=http://localhost:8243
 
 # Stop every process started here (the whole process group) on exit.
 trap 'trap - EXIT INT TERM; kill 0 2>/dev/null' EXIT INT TERM
@@ -17,7 +17,7 @@ if temporal operator cluster health --address "$STONEPEDIA_TEMPORAL_ADDRESS" >/d
   exit 1
 fi
 
-temporal server start-dev --db-filename .dev/temporal.db --port 7243 --ui-port 8243 --log-level warn \
+temporal server start-dev --db-filename .dev/temporal.db --port 7243 --ui-port 8243 --ui-public-path /temporal --log-level warn \
   --search-attribute Bundle=Keyword --search-attribute ProposalState=Keyword &
 until temporal operator cluster health --address "$STONEPEDIA_TEMPORAL_ADDRESS" >/dev/null 2>&1; do sleep 1; done
 
@@ -27,6 +27,6 @@ uv run uvicorn stonepedia.web:app --reload --port 8000 --log-level warning &
 
 echo
 echo "  Stonepedia:  http://localhost:5173"
-echo "  Temporal UI: http://localhost:8243"
+echo "  Temporal UI: http://localhost:5173/temporal/"
 echo
 wait
