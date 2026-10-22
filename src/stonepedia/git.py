@@ -3,6 +3,7 @@
 import os
 import subprocess
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 SYSTEM_AUTHOR = ("Stonepedia", "stonepedia@stonepedia.local")
 
@@ -169,3 +170,42 @@ def redact(url: str) -> str:
     import re
 
     return re.sub(r"(://[^/@:]+):[^/@]+@", r"\1:***@", url)
+
+
+def http_credentials(url: str) -> tuple[str, str]:
+    """Read HTTP credentials without interpreting SSH URLs or local paths."""
+    if not url.lower().startswith(("http://", "https://")):
+        return "", ""
+    parts = urlsplit(url)
+    return unquote(parts.username or ""), unquote(parts.password or "")
+
+
+def public_url(url: str) -> str:
+    """HTTP repository URL for display, with all credentials removed."""
+    if not url.lower().startswith(("http://", "https://")):
+        return url
+    parts = urlsplit(url)
+    return urlunsplit(parts._replace(netloc=parts.netloc.rsplit("@", 1)[-1]))
+
+
+def with_http_credentials(url: str, username: str | None, token: str = "", *, remove: bool = False) -> str:
+    """Apply UI credentials to the existing URL-based Git authentication.
+
+    An empty token preserves the current password; removal must be explicit.
+    """
+    if not token and username is None and not remove:
+        return url
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        if token:
+            raise ValueError("An HTTP(S) repository URL is required when using an access token.")
+        return url
+    old_username, old_token = http_credentials(url)
+    if remove:
+        return public_url(url)
+    password = token or old_token
+    if not password:
+        return url
+    user = (username if username is not None else old_username).strip() or "oauth2"
+    authority = parts.netloc.rsplit("@", 1)[-1]
+    return urlunsplit(parts._replace(netloc=f"{quote(user, safe='')}:{quote(password, safe='')}@{authority}"))

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, type BundleDetail, type BundleSettings, type FieldDef, type PushState, type Template } from '../api'
+import { api, type BundleDetail, type BundleSettings, type FieldDef, type GitCredentials, type PushState, type Template } from '../api'
+import { GitCredentialsFields } from '../GitCredentialsFields'
 import { useI18n } from '../i18n'
 import { ArticleView } from '../markdown'
 import { ErrorBox, formatTime } from '../ui'
@@ -111,17 +112,25 @@ function SettingsForm({ b, onSaved }: { b: BundleDetail; onSaved: (d: BundleDeta
   const [s, setS] = useState<BundleSettings>(b.settings)
   const [remote, setRemote] = useState(b.remote_url)
   const [branch, setBranch] = useState(b.branch)
+  const [credentials, setCredentials] = useState<GitCredentials>({ git_username: b.git_username })
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>()
   const [saved, setSaved] = useState(false)
   const set = (patch: Partial<BundleSettings>) => { setSaved(false); setS({ ...s, ...patch }) }
 
   const save = async () => {
+    setBusy(true)
     try {
-      onSaved(await api.saveBundleSettings(b.slug, { editor: name, settings: s, remote_url: remote, branch }))
+      const updated = await api.saveBundleSettings(b.slug, { editor: name, settings: s, remote_url: remote, branch, ...credentials })
+      onSaved(updated)
+      setRemote(updated.remote_url)
+      setCredentials({ git_username: updated.git_username, git_token: '', remove_git_token: false })
       setSaved(true)
       setError(undefined)
     } catch (err) {
       setError(err)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -148,12 +157,19 @@ function SettingsForm({ b, onSaved }: { b: BundleDetail; onSaved: (d: BundleDeta
       <label>
         {t('bset.remote')}
         <span className="hint">{t('bundles.cloneUrlHint')}</span>
-        <input value={remote} onChange={(e) => { setSaved(false); setRemote(e.target.value) }} />
+        <input value={remote} onChange={(e) => {
+          setSaved(false)
+          setRemote(e.target.value)
+          setCredentials({ ...credentials, remove_git_token: false })
+        }} />
       </label>
       <label>{t('bset.branch')}<input value={branch} onChange={(e) => { setSaved(false); setBranch(e.target.value) }} /></label>
+      {b.git_token_configured && remote.trim() !== b.remote_url && <p className="hint">{t('git.newRemote')}</p>}
+      <GitCredentialsFields value={credentials} configured={b.git_token_configured && remote.trim() === b.remote_url}
+        onChange={(patch) => { setSaved(false); setCredentials({ ...credentials, ...patch }) }} />
       <p className="muted small">{t('bset.root')}: <code>{b.root}</code>{b.clone_url && <> · {b.clone_url}</>}</p>
       <div className="actions">
-        <button className="primary" onClick={save}>{t('bset.save')}</button>
+        <button className="primary" disabled={busy} onClick={save}>{t('bset.save')}</button>
         {saved && <span className="muted">{t('bset.saved')}</span>}
       </div>
     </div>
@@ -222,7 +238,7 @@ function TemplateEditor({ slug }: { slug: string }) {
               <tr key={i}>
                 <td><input value={f.name} onChange={(e) => setField(i, { name: e.target.value })} /></td>
                 <td>
-                  <select value={f.written_by} onChange={(e) => setField(i, { written_by: e.target.value as FieldDef['written_by'] })}>
+                  <select aria-label={`${t('tmpl.writtenBy')}: ${f.name}`} value={f.written_by} onChange={(e) => setField(i, { written_by: e.target.value as FieldDef['written_by'] })}>
                     <option value="ai">{t('tmpl.writtenBy.ai')}</option>
                     <option value="system">{t('tmpl.writtenBy.system')}</option>
                   </select>

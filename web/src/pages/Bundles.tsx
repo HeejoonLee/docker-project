@@ -4,6 +4,7 @@ import { api, type NewBundle } from '../api'
 import { useI18n } from '../i18n'
 import { ErrorBox, formatTime } from '../ui'
 import { usePoll } from '../usePoll'
+import { GitCredentialsFields } from '../GitCredentialsFields'
 
 const EMPTY: NewBundle = { slug: '', name: '', language: 'ko', id_prefix: '', clone_url: '', branch: '', root: '.', remote_url: '' }
 
@@ -96,9 +97,10 @@ export default function Bundles() {
               <input value={form.remote_url} onChange={(e) => set({ remote_url: e.target.value })} />
             </label>
           )}
+          <GitCredentialsFields value={form} onChange={set} />
           <div className="actions">
             <button className="primary" disabled={busy}>{busy ? t('bundles.creating') : t('common.create')}</button>
-            <button type="button" onClick={() => setOpen(false)}>{t('common.cancel')}</button>
+            <button type="button" onClick={() => { setOpen(false); setForm({ ...form, git_token: '' }) }}>{t('common.cancel')}</button>
           </div>
         </form>
       )}

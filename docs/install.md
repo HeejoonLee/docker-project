@@ -42,8 +42,19 @@ sets up its database. `docker compose ps` shows `web` as `healthy` when ready.
    Save, then **Test agent**. It should answer "OK" within a few seconds.
 3. **Bundles** → *New Bundle*. Start empty (optionally give an empty GitLab
    project's URL to push to), or use an existing repository and the folder its
-   Articles live in. If GitLab needs a token for pushing, put it in the URL:
-   `http://user:token@gitlab.intra/group/repo.git`.
+   Articles live in. Enter the HTTP(S) repository URL and, for a private repository,
+   fill in **Git access token**. **Git username** can be left blank for a GitLab
+   personal access token (defaults to `oauth2`). Use a token with
+   [`write_repository`](https://docs.gitlab.com/user/profile/personal_access_tokens/)
+   access so Stonepedia can clone, fetch and push accepted changes.
+   In a Bundle's **Settings**, enter a replacement token to rotate it, leave the
+   field blank to keep it, or select **Remove the saved token when saving**.
+   Changing the repository URL requires re-entering the token; saved credentials
+   are not automatically forwarded to a different repository.
+   Tokens use the existing Git URL authentication storage: they are hidden in
+   Bundle API responses and the UI, but stored in the local Git configuration and
+   Temporal history. Removing a token stops its use for the remote; it does not
+   erase historical copies. Revoke old tokens in GitLab.
 4. Optionally, under **Maintenance**, schedule the integrity check and link refresh.
 
 ## Everyday use

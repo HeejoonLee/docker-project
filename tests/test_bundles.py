@@ -12,6 +12,7 @@ import yaml
 
 from stonepedia import frontmatter, git
 from stonepedia.web import app
+from git_http import authenticated_remote
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -210,3 +211,71 @@ async def test_bad_clone_reports_error_and_slug_can_be_reused(http, tmp_path, ui
     assert r.status_code == 422 and "Could not create the Bundle" in r.json()["detail"]
     r = await http.post("/api/bundles", json={"slug": slug, "name": "x"})
     assert r.status_code == 201, r.text
+
+
+async def test_http_token_clone_push_rotate_preserve_and_remove(http, settings, tmp_path, uid):
+    seed = tmp_path / "seed"
+    git.init(seed)
+    (seed / "README.md").write_text("Private knowledge\n")
+    git.commit_all(seed, "Initial knowledge", git.SYSTEM_AUTHOR)
+    remote = bare_repo(tmp_path, "remote", seed)
+    with authenticated_remote(tmp_path, token="first@token:/?#%") as server:
+        slug = f"auth{uid}"
+        r = await http.post("/api/bundles", json={
+            "slug": slug, "name": "Private", "clone_url": server.url, "git_token": server.token,
+        })
+        assert r.status_code == 201, r.text
+        detail = await pushed(http, slug)
+        assert detail["push"]["state"] == "ok", detail["push"]
+        assert detail["remote_url"] == detail["clone_url"] == server.url
+        assert detail["git_token_configured"] and detail["git_username"] == "oauth2"
+        assert server.token not in json.dumps(detail)
+        assert git.git(remote, "log", "-1", "--format=%s").strip() == "Set up Stonepedia"
+
+        repo = settings.bundles_dir / slug
+        async def save(**credentials):
+            r = await http.put(f"/api/bundles/{slug}/settings", json={
+                "editor": "kim", "settings": detail["settings"],
+                "remote_url": detail["remote_url"], "branch": detail["branch"], **credentials,
+            })
+            assert r.status_code == 200, r.text
+            assert server.token not in r.text
+            return r.json()
+
+        # Blank and omitted tokens preserve authentication across ordinary saves.
+        await save(git_token="")
+        await save()
+        assert git.http_credentials(git.git(repo, "remote", "get-url", "origin").strip()) == ("oauth2", server.token)
+
+        # Rotated credentials must actually authenticate subsequent fetches and pushes.
+        server.username, server.token = "git-bot", "replacement@token:/?#%"
+        detail["settings"]["name"] = "Rotated"
+        detail = await save(git_username=server.username, git_token=server.token)
+        assert (await pushed(http, slug))["push"]["state"] == "ok"
+        assert git.git(remote, "log", "-1", "--format=%s").strip() == "Update Bundle settings"
+        assert git.http_credentials(git.git(repo, "remote", "get-url", "origin").strip()) == (server.username, server.token)
+
+        detail = await save(remove_git_token=True)
+        assert not detail["git_token_configured"]
+        assert git.git(repo, "remote", "get-url", "origin").strip() == server.url
+
+
+async def test_http_token_for_new_bundle_and_failed_clone_is_hidden(http, tmp_path, uid):
+    bare_repo(tmp_path, "remote")
+    with authenticated_remote(tmp_path) as server:
+        slug = f"newauth{uid}"
+        r = await http.post("/api/bundles", json={
+            "slug": slug, "name": "Private", "remote_url": server.url, "git_token": server.token,
+        })
+        assert r.status_code == 201, r.text
+        assert (await pushed(http, slug))["push"]["state"] == "ok"
+
+        r = await http.post("/api/bundles", json={
+            "slug": f"badauth{uid}", "name": "Private", "clone_url": server.url, "git_token": "wrong-token",
+        })
+        assert r.status_code == 422 and "wrong-token" not in r.text
+
+
+async def test_token_requires_http_remote(http, uid):
+    r = await http.post("/api/bundles", json={"slug": f"token{uid}", "name": "x", "git_token": "secret"})
+    assert r.status_code == 422 and "HTTP(S)" in r.text and "secret" not in r.text

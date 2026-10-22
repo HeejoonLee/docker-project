@@ -78,6 +78,8 @@ export interface BundleDetail {
   remote_url: string
   branch: string
   clone_url: string
+  git_username: string
+  git_token_configured: boolean
   push: PushState
   head: string | null
   articles: ArticleSummary[]
@@ -94,7 +96,12 @@ export interface ReportSummary {
 export interface Finding { severity: 'error' | 'warning'; kind: string; path: string; message: string }
 export interface MaintenanceReport { bundle: string; check: Check; requested_by: string; findings: Finding[]; proposals: string[]; summary: string }
 export interface MaintenanceOverview { timezone: string; schedules: Record<Check, ScheduleConfig>; reports: ReportSummary[] }
-export interface NewBundle {
+export interface GitCredentials {
+  git_username?: string
+  git_token?: string
+  remove_git_token?: boolean
+}
+export interface NewBundle extends GitCredentials {
   slug: string; name: string; language: string; id_prefix: string
   clone_url: string; branch: string; root: string; remote_url: string
 }
@@ -134,7 +141,7 @@ export const api = {
   article: (slug: string, path: string) =>
     request<{ path: string; content: string }>('GET', `/api/bundles/${slug}/articles/${path}`),
   createBundle: (b: NewBundle) => request<BundleSummary>('POST', '/api/bundles', b),
-  saveBundleSettings: (slug: string, body: { editor: string; settings: BundleSettings; remote_url: string; branch: string }) =>
+  saveBundleSettings: (slug: string, body: GitCredentials & { editor: string; settings: BundleSettings; remote_url: string; branch: string }) =>
     request<BundleDetail>('PUT', `/api/bundles/${slug}/settings`, body),
   template: (slug: string, inferred = false) =>
     request<Template>('GET', `/api/bundles/${slug}/template${inferred ? '?inferred=true' : ''}`),

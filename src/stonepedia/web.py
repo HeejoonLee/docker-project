@@ -13,7 +13,7 @@ from typing import Literal
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 from temporalio.client import Client, WorkflowFailureError, WorkflowQueryFailedError, WorkflowUpdateFailedError
 from temporalio.common import SearchAttributePair, TypedSearchAttributes, WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
@@ -96,12 +96,34 @@ class BundleDetail(BaseModel):
     remote_url: str  # with any embedded token hidden
     branch: str
     clone_url: str
+    git_username: str
+    git_token_configured: bool
     push: PushState
     head: str | None
     articles: list[ArticleSummary]
 
 
-class BundleSettingsBody(BaseModel):
+class GitCredentialsBody(BaseModel):
+    git_username: str | None = None
+    git_token: SecretStr | None = None
+    remove_git_token: bool = False
+
+    def apply(self, url: str) -> str:
+        try:
+            return git.with_http_credentials(
+                url, self.git_username,
+                self.git_token.get_secret_value() if self.git_token else "",
+                remove=self.remove_git_token,
+            )
+        except ValueError:
+            raise HTTPException(422, "An HTTP(S) repository URL is required when using an access token.") from None
+
+
+class BundleCreateBody(BundleSpec, GitCredentialsBody):
+    pass
+
+
+class BundleSettingsBody(GitCredentialsBody):
     editor: str
     settings: BundleSettings
     remote_url: str
@@ -146,11 +168,16 @@ async def list_bundles(request: Request) -> list[BundleSummary]:
 
 
 @app.post("/api/bundles", status_code=201)
-async def create_bundle(spec: BundleSpec, request: Request) -> BundleSummary:
+async def create_bundle(body: BundleCreateBody, request: Request) -> BundleSummary:
+    spec = BundleSpec.model_validate(body.model_dump(include=set(BundleSpec.model_fields)))
     if (_settings(request).bundles_dir / spec.slug).exists():
         raise HTTPException(409, f"A Bundle folder named '{spec.slug}' already exists.")
     spec.clone_url = spec.clone_url.strip()
     spec.remote_url = spec.remote_url.strip()
+    if spec.clone_url:
+        spec.clone_url = body.apply(spec.clone_url)
+    if spec.remote_url or not spec.clone_url:
+        spec.remote_url = body.apply(spec.remote_url)
     try:
         handle = await _client(request).start_workflow(
             BundleWorkflow.run,
@@ -203,9 +230,11 @@ async def get_bundle(slug: str, request: Request) -> BundleDetail:
         name=settings.name,
         settings=settings,
         root=spec.root,
-        remote_url=git.redact(spec.remote_url),
+        remote_url=git.public_url(spec.remote_url),
         branch=spec.branch,
-        clone_url=git.redact(spec.clone_url),
+        clone_url=git.public_url(spec.clone_url),
+        git_username=git.http_credentials(spec.remote_url)[0],
+        git_token_configured=bool(git.http_credentials(spec.remote_url)[1]),
         push=status.push,
         head=git.head(repo) if (repo / ".git").exists() else None,
         articles=articles,
@@ -216,8 +245,9 @@ async def get_bundle(slug: str, request: Request) -> BundleDetail:
 async def put_bundle_settings(slug: str, body: BundleSettingsBody, request: Request) -> BundleDetail:
     status = await _bundle_status(request, slug)
     remote = body.remote_url.strip()
-    if remote == git.redact(status.spec.remote_url):
-        remote = status.spec.remote_url  # unchanged (the UI only ever sees the redacted form)
+    if remote in (git.public_url(status.spec.remote_url), git.redact(status.spec.remote_url)):
+        remote = status.spec.remote_url  # unchanged URL: preserve the saved credentials
+    remote = body.apply(remote)
     update = BundleConfigUpdate(
         editor=body.editor.strip() or "anonymous",
         settings=body.settings,
