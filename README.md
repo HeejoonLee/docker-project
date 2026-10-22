@@ -8,6 +8,10 @@ Everything is configured in the browser. Under the hood, every step is a [Tempor
 
 Vocabulary: [CONTEXT.md](CONTEXT.md) · Decisions: [docs/adr](docs/adr) · Plan: [docs/plan.md](docs/plan.md)
 
+To publish to Docker Hub and deploy on another server, follow the
+[Docker Hub deployment guide](docs/docker-hub.md). It uses port 8081 and runs
+alongside an existing Temporal installation.
+
 ## Deploy on a server (offline)
 
 On a machine with Docker and this repository:

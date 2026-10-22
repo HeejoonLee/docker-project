@@ -29,6 +29,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
 COPY --from=web /web/dist ./web/dist
+COPY docker-compose.yml /app/deploy/docker-compose.yml
+COPY deploy/temporal /app/deploy/temporal
 ENV STONEPEDIA_DATA_DIR=/data \
     DISABLE_AUTOUPDATER=1 \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
