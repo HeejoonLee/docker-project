@@ -12,6 +12,9 @@ To publish to Docker Hub and deploy on another server, follow the
 [Docker Hub deployment guide](docs/docker-hub.md). It uses port 8081 and runs
 alongside an existing Temporal installation.
 
+If the server cannot reach Docker Hub, publish the offline package as a GitHub
+Release instead: see the [GitHub Release deployment guide](docs/github-release.md).
+
 ## Deploy on a server (offline)
 
 On a machine with Docker and this repository:

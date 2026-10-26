@@ -19,7 +19,11 @@ images=(
 )
 
 echo "Building stonepedia:$VERSION"
-docker build -q -t "stonepedia:$VERSION" . >/dev/null
+if ! log=$(docker build -t "stonepedia:$VERSION" . 2>&1); then
+  echo "$log" | tail -40 >&2
+  echo "docker build failed" >&2
+  exit 1
+fi
 for image in "${images[@]:1}"; do
   docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image"
 done
