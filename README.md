@@ -4,7 +4,7 @@ Stonepedia turns documents into reviewed, git-versioned knowledge for AI agents.
 
 You give it a **Source**: pasted text, a PDF/Word/PowerPoint/Excel file, a photo of a handwritten note, an intranet link, or a typed **Request**. Claude Code drafts a **Proposal**, a set of changes to the **Articles** (OKF v0.2 Markdown) of a **Bundle**. A person reviews each change (Accept, Revise, Edit or Discard), and the accepted changes become one git commit, pushed to GitLab. Scheduled **maintenance** checks links and structure, re-reads linked pages, and can audit a Bundle for duplicates and contradictions. Its output is always another Proposal, never a direct change.
 
-Everything is configured in the browser. Under the hood, every step is a [Temporal](https://temporal.io) workflow; the Temporal UI ships alongside for debugging.
+Bundle and agent settings are configured in the browser. Host code references and SSH keys need read-only Docker mounts. Under the hood, every step is a [Temporal](https://temporal.io) workflow; the Temporal UI ships alongside for debugging.
 
 Vocabulary: [CONTEXT.md](CONTEXT.md) · Decisions: [docs/adr](docs/adr) · Plan: [docs/plan.md](docs/plan.md)
 
@@ -33,6 +33,11 @@ docker compose up -d     # then open http://<server>:8080
 ```
 
 Then, in the browser: **Settings** (point Claude at your LLM gateway, press *Test agent*) → **Bundles** (new or from an existing repo) → **New**.
+
+For SSH remotes (including Gerrit on a custom port) or read-only source-code
+references from the Docker host, see [deployment setup](docs/install.md). An
+existing OKF v0.2 repository is imported without rewriting its Articles;
+Stonepedia reports compatibility findings on the Bundle page.
 
 ## Run from source
 

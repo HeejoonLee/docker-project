@@ -22,7 +22,7 @@ from temporalio.service import RPCError
 
 import httpx
 
-from stonepedia import appconfig, bundle, config, git, schedules, search, temporal_ui
+from stonepedia import appconfig, bundle, config, frontmatter, git, maintenance, schedules, search, temporal_ui
 from stonepedia.bundle import BundleSettings, Template
 from stonepedia.models import (
     AgentCheck,
@@ -30,6 +30,7 @@ from stonepedia.models import (
     BundleRun,
     BundleSpec,
     BundleStatus,
+    Finding,
     MaintenanceCheck,
     MaintenanceInput,
     MaintenanceReport,
@@ -101,6 +102,9 @@ class BundleDetail(BaseModel):
     push: PushState
     head: str | None
     articles: list[ArticleSummary]
+    reference_dir: str = ""
+    reference_excludes: list[str] = []
+    import_findings: list[Finding] = []
 
 
 class GitCredentialsBody(BaseModel):
@@ -128,6 +132,8 @@ class BundleSettingsBody(GitCredentialsBody):
     settings: BundleSettings
     remote_url: str
     branch: str
+    reference_dir: str | None = None
+    reference_excludes: list[str] | None = None
 
 
 class TemplateBody(BaseModel):
@@ -225,6 +231,18 @@ async def get_bundle(slug: str, request: Request) -> BundleDetail:
         )
         for rel, meta in bundle.articles(root)
     ]
+    import_findings = maintenance.check(root, repo) if spec.clone_url else []
+    if spec.clone_url:
+        _, _, _, warning = bundle.infer_id_scheme(root, settings.id_prefix)
+        if warning:
+            import_findings.append(Finding(severity="warning", kind="ambiguous_id_field", path=".", message=warning))
+        index = root / "index.md"
+        if index.exists():
+            index_meta, _ = frontmatter.split(index.read_text(errors="replace"))
+            version = index_meta.get("okf_version")
+            if version is not None and str(version) != "0.2":
+                import_findings.append(Finding(severity="warning", kind="okf_version", path="index.md",
+                                               message=f"Repository declares OKF version {version}; Stonepedia expects 0.2."))
     return BundleDetail(
         slug=slug,
         name=settings.name,
@@ -238,6 +256,9 @@ async def get_bundle(slug: str, request: Request) -> BundleDetail:
         push=status.push,
         head=git.head(repo) if (repo / ".git").exists() else None,
         articles=articles,
+        reference_dir=spec.reference_dir,
+        reference_excludes=spec.reference_excludes,
+        import_findings=import_findings,
     )
 
 
@@ -253,6 +274,8 @@ async def put_bundle_settings(slug: str, body: BundleSettingsBody, request: Requ
         settings=body.settings,
         remote_url=remote if remote != status.spec.remote_url else None,
         branch=body.branch.strip() if body.branch.strip() != status.spec.branch else None,
+        reference_dir=body.reference_dir.strip() if body.reference_dir is not None and body.reference_dir.strip() != status.spec.reference_dir else None,
+        reference_excludes=body.reference_excludes if body.reference_excludes is not None and body.reference_excludes != status.spec.reference_excludes else None,
     )
     await _update(_client(request).get_workflow_handle(f"bundle-{slug}").execute_update(BundleWorkflow.save_config, update))
     return await get_bundle(slug, request)
@@ -363,7 +386,7 @@ async def list_proposals(request: Request, bundle: str | None = None, state: str
 async def create_proposal(
     request: Request,
     bundle: str = Form(...),
-    kind: Literal["text", "file", "link", "request"] = Form(...),
+    kind: Literal["text", "file", "link", "request", "code"] = Form(...),
     submitted_by: str = Form(""),
     title: str = Form(""),
     text: str = Form(""),
@@ -375,8 +398,10 @@ async def create_proposal(
     if not (settings.bundles_dir / bundle / ".git").exists():
         raise HTTPException(404, "No such Bundle.")
     title = title.strip()
-    if kind in ("text", "request") and not text.strip():
+    if kind in ("text", "request", "code") and not text.strip():
         raise HTTPException(422, "Text is required.")
+    if kind == "code" and not (await _bundle_status(request, bundle)).spec.reference_dir:
+        raise HTTPException(422, "Configure a Reference directory for this Bundle first.")
     if kind == "link" and not url.strip().startswith(("http://", "https://")):
         raise HTTPException(422, "Enter a link starting with http:// or https://")
     if kind == "file" and (file is None or not file.filename):
@@ -456,7 +481,11 @@ async def get_source_file(proposal_id: str, name: str, request: Request) -> File
 @app.get("/api/proposals/{proposal_id}")
 async def get_proposal(proposal_id: str, request: Request) -> ProposalView:
     try:
-        return await _proposal_handle(request, proposal_id).query(ProposalWorkflow.view)
+        handle = _proposal_handle(request, proposal_id)
+        view = await handle.query(ProposalWorkflow.view)
+        if view.state == "awaiting_review" and view.reference_used:
+            return await _update(handle.execute_update(ProposalWorkflow.check_code))
+        return view
     except RPCError:
         raise HTTPException(404, "No such Proposal.")
 
@@ -472,6 +501,13 @@ async def decide(proposal_id: str, change_id: str, body: DecisionBody, request: 
 async def submit(proposal_id: str, body: SubmitBody, request: Request) -> ProposalView:
     return await _update(_proposal_handle(request, proposal_id).execute_update(
         ProposalWorkflow.submit, body.reviewer.strip()
+    ))
+
+
+@app.post("/api/proposals/{proposal_id}/refresh-code")
+async def refresh_code(proposal_id: str, body: SubmitBody, request: Request) -> ProposalView:
+    return await _update(_proposal_handle(request, proposal_id).execute_update(
+        ProposalWorkflow.refresh_code, body.reviewer.strip()
     ))
 
 

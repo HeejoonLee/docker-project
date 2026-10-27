@@ -10,7 +10,7 @@ from stonepedia.bundle import BundleSettings, Template
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 ChangeKind = Literal["create", "update", "retire"]
-SourceKind = Literal["text", "file", "link", "request", "audit"]
+SourceKind = Literal["text", "file", "link", "request", "code", "audit"]
 Decision = Literal["pending", "accepted", "discarded"]
 ProposalState = Literal["generating", "awaiting_review", "committing", "done", "discarded", "failed"]
 
@@ -29,6 +29,8 @@ class BundleSpec(BaseModel):
     remote_url: str = ""  # where commits are pushed; empty = local only
     branch: str = "main"
     root: str = "."  # the Bundle's folder inside the repo
+    reference_dir: str = ""  # path beneath the worker's read-only /references mount
+    reference_excludes: list[str] = [".git", ".env*", "node_modules", ".venv", "dist", "build"]
 
     @field_validator("slug")
     @classmethod
@@ -44,6 +46,14 @@ class BundleSpec(BaseModel):
         if v.startswith("/") or ".." in v.split("/"):
             raise ValueError("root must be a folder inside the repository")
         return v
+
+    @field_validator("reference_dir")
+    @classmethod
+    def _reference_dir(cls, v: str) -> str:
+        v = v.strip()
+        if v.startswith("/") or ".." in v.split("/"):
+            raise ValueError("reference_dir must stay inside the mounted reference root")
+        return v.rstrip("/")
 
 
 class SourceInput(BaseModel):
@@ -95,6 +105,8 @@ class BundleConfigUpdate(BaseModel):
     template: "Template | None" = None
     remote_url: str | None = None
     branch: str | None = None
+    reference_dir: str | None = None
+    reference_excludes: list[str] | None = None
 
 
 class BundleInit(BaseModel):
@@ -141,6 +153,8 @@ class AgentJob(BaseModel):
     proposal_id: str
     bundle: str
     root: str = "."
+    reference_dir: str = ""  # resolved worker path, absent when Bundle has no reference
+    reference_excludes: list[str] = []
     mode: AgentMode
     title: str
     source: SourceInfo
@@ -200,6 +214,8 @@ class ProposalView(BaseModel):
     summary: str = ""  # the agent's own account of its latest run
     cost_usd: float = 0.0
     runs: int = 0
+    reference_used: bool = False
+    code_stale_paths: list[str] = []
 
 
 class CommitRequest(BaseModel):
@@ -213,6 +229,7 @@ class CommitRequest(BaseModel):
 class CommitResult(BaseModel):
     commit: str | None = None
     stale_ids: list[str] = []
+    stale_code_paths: list[str] = []
 
 
 class Finding(BaseModel):

@@ -11,7 +11,9 @@ from stonepedia.deploy import render_compose
 
 @pytest.mark.parametrize("port_override", [None, "9080"])
 def test_generated_stack_needs_no_host_files_and_preserves_scripts(tmp_path, port_override):
-    if not shutil.which("docker"):
+    if not shutil.which("docker") or subprocess.run(
+        ["docker", "compose", "version"], capture_output=True, check=False,
+    ).returncode != 0:
         pytest.skip("Docker Compose is needed to validate config interpolation")
     repo = Path(__file__).resolve().parents[1]
     packaged = tmp_path / "packaged"

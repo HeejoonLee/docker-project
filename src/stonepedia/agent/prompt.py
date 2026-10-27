@@ -14,6 +14,7 @@ def build(job: AgentJob, bundle: dict, template: dict, stale_targets: list[str])
             _intro(bundle),
             _contract(template, language),
             _rules(),
+            _reference(job),
             _task(job, stale_targets),
             _finish(language),
         ]
@@ -81,6 +82,12 @@ def _material(job: AgentJob) -> str:
         ]
         if job.request_targets:
             lines.append("It is aimed at: " + ", ".join(f"`{p}`" for p in job.request_targets) + ".")
+    elif src.kind == "code":
+        lines = [
+            f"The reviewer asks you to document code in the Bundle's Reference directory: {job.reference_dir}.",
+            f"Read the full focus instruction in `{folder}/request.md`, then read the relevant code files directly.",
+            "The code is not copied into this Bundle.",
+        ]
     elif src.kind == "audit":
         lines = [
             f"This is an audit of the existing Articles requested by {src.submitted_by}; the instructions are in "
@@ -114,6 +121,20 @@ def _material(job: AgentJob) -> str:
             "refer to it in the body where useful (e.g. by page)."
         )
     return "\n".join(lines)
+
+
+def _reference(job: AgentJob) -> str:
+    if not job.reference_dir:
+        return ""
+    excluded = ", ".join(f"`{pattern}`" for pattern in job.reference_excludes) or "(none)"
+    return "\n".join([
+        "## Read-only source-code reference",
+        f"Reference directory: `{job.reference_dir}`. You may use Read, Glob and Grep there. Do not edit it.",
+        f"Avoid these paths in discovery unless the reviewer specifically needs them: {excluded}.",
+        "For every Article based on code, add a top-level `code_refs` list of the relative paths of the exact files used.",
+        "The system validates those paths and records file hashes and the Git commit in `sources` frontmatter.",
+        "Never cite a directory or an invented file path. A code-only Proposal needs at least one code reference.",
+    ])
 
 
 def _task(job: AgentJob, stale_targets: list[str]) -> str:

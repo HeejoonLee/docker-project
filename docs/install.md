@@ -42,8 +42,8 @@ sets up its database. `docker compose ps` shows `web` as `healthy` when ready.
    Save, then **Test agent**. It should answer "OK" within a few seconds.
 3. **Bundles** → *New Bundle*. Start empty (optionally give an empty GitLab
    project's URL to push to), or use an existing repository and the folder its
-   Articles live in. Enter the HTTP(S) repository URL and, for a private repository,
-   fill in **Git access token**. **Git username** can be left blank for a GitLab
+   Articles live in. Enter an HTTP(S) or SSH repository URL. For a private HTTP(S)
+   repository, fill in **Git access token**. **Git username** can be left blank for a GitLab
    personal access token (defaults to `oauth2`). Use a token with
    [`write_repository`](https://docs.gitlab.com/user/profile/personal_access_tokens/)
    access so Stonepedia can clone, fetch and push accepted changes.
@@ -51,16 +51,41 @@ sets up its database. `docker compose ps` shows `web` as `healthy` when ready.
    field blank to keep it, or select **Remove the saved token when saving**.
    Changing the repository URL requires re-entering the token; saved credentials
    are not automatically forwarded to a different repository.
+   For SSH remotes, mount a server-managed `.ssh` directory into the worker as
+   shown below. A Gerrit remote with a custom port uses a URL such as
+   `ssh://user@gerrit.intra:29418/project.git`. The mounted `known_hosts` must
+   contain the verified `[gerrit.intra]:29418` host key. SSH failures stop without
+   prompting; the web UI's token fields do not apply to SSH.
    Tokens use the existing Git URL authentication storage: they are hidden in
    Bundle API responses and the UI, but stored in the local Git configuration and
    Temporal history. Removing a token stops its use for the remote; it does not
    erase historical copies. Revoke old tokens in GitLab.
 4. Optionally, under **Maintenance**, schedule the integrity check and link refresh.
 
+To use SSH and a host source-code directory, place this in a
+`docker-compose.override.yml` beside the Compose file, adjusting the host paths:
+
+```yaml
+services:
+  worker:
+    volumes:
+      - /srv/stonepedia/ssh:/home/stonepedia/.ssh:ro
+      - /srv/code:/references:ro
+```
+
+The SSH directory should contain the private key, optional `config`, and verified
+`known_hosts`; key files must be readable by the worker user (UID 1000). Mount
+only code the agent may read. In Bundle settings, enter a path below
+`/references`, such as `project-a`. Reference exclusions guide the agent's
+search but do not restrict access to known files. The code stays outside the
+Bundle; accepted Articles cite files by path and SHA-256 hash, with a Git commit
+when available. A code-only Proposal requires a focus instruction.
+
 ## Everyday use
 
 1. **New** → pick the Bundle, then paste text, upload a file (PDF, Word,
-   PowerPoint, Excel, image of a note...), give a link, or write a Request.
+   PowerPoint, Excel, image of a note...), give a link, write a Request, or
+   select **Code reference** and enter a focus instruction.
 2. The agent drafts Article changes (usually under a minute).
 3. Review each change: **Accept**, **Revise** (tell the agent what to change),
    **Edit** by hand, or **Discard**. Feedback on the whole Proposal goes in the box

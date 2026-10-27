@@ -112,6 +112,8 @@ async def test_import_knowledge_subfolder(http, settings, tmp_path, uid):
     assert r.status_code == 201, r.text
     detail = (await http.get(f"/api/bundles/{slug}")).json()
     assert detail["root"] == "knowledge/bl-kd" and len(detail["articles"]) == 18
+    assert detail["settings"]["id_field"] == "cornerstone.knowledge_id"
+    assert detail["settings"]["id_prefix"] == "BK-"
     # existing hand-written index and manifest are left alone
     assert detail["settings"]["generate_index"] is False and detail["settings"]["generate_manifest"] is False
 
@@ -119,12 +121,7 @@ async def test_import_knowledge_subfolder(http, settings, tmp_path, uid):
     assert {t["name"] for t in template["types"]} == {"Specification", "Guidance", "Decision"}
     assert "cornerstone" in [f["name"] for f in template["fields"] if f["written_by"] == "ai"]
 
-    # Use the repo's own id field.
-    s = detail["settings"] | {"id_prefix": "BK-", "id_field": "cornerstone.knowledge_id"}
-    r = await http.put(f"/api/bundles/{slug}/settings",
-                       json={"editor": "park", "settings": s, "remote_url": detail["remote_url"], "branch": detail["branch"]})
-    assert r.status_code == 200, r.text
-    assert any(a["id"] == "BK-04" for a in r.json()["articles"])
+    assert any(a["id"] == "BK-04" for a in detail["articles"])
 
     # A Request aimed at an existing Article keeps its cornerstone profile block.
     target = "bootloader/factory-dm-ffu.md"
@@ -149,7 +146,7 @@ async def test_import_knowledge_subfolder(http, settings, tmp_path, uid):
     assert (repo / "knowledge/bl-kd/sources" / new["id"] / "text.md").exists()
     assert not (repo / "notes").exists()
     log = git.git(remote, "log", "--format=%an|%s", "-4", "HEAD")
-    assert "lee|Reboot timing" in log and "park|Update Bundle settings" in log and "Stonepedia|Set up Stonepedia" in log
+    assert "lee|Reboot timing" in log and "Stonepedia|Set up Stonepedia" in log
 
 
 async def test_retire_marks_article(http, settings, uid):

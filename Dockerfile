@@ -16,7 +16,7 @@ RUN npm install -g --no-audit --no-fund @anthropic-ai/claude-code@${CLAUDE_CODE_
 # --- Python app (web API + Temporal worker) ---
 FROM python:3.13-slim
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates \
+ && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
 COPY --from=claude /claude /usr/local/bin/claude

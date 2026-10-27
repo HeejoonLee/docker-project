@@ -24,6 +24,14 @@ _Avoid_: Knowledge document, knowledge unit, page
 Anything ingested as evidence for Articles: a link, a PDF, an image of a handwritten note. Its original and extracted text are kept so that Articles can cite it.
 _Avoid_: Input, upload, reference document
 
+**Reference directory**:
+A persistent, read-only source-code directory associated with a Bundle that the proposing agent can consult when working on its Articles or when starting a Proposal from code. Its code stays outside the Bundle.
+_Avoid_: Uploaded Source, Bundle root
+
+**Code citation**:
+An Article's reference to a file in its Bundle's Reference directory, identified by its relative path and content hash, plus the code's git commit when available.
+_Avoid_: Source archive
+
 ## Review
 
 **Proposal**:
@@ -35,7 +43,7 @@ A Reviewer's typed instruction to change knowledge without a new Source. It is k
 _Avoid_: Prompt, ticket
 
 **Stale**:
-The state of an Article change whose underlying Article has changed since the change was produced. It cannot be accepted until it is revised or edited.
+The state of an Article change whose underlying Article has changed, or of a Proposal whose cited code files have changed, since the change was produced. A stale code reference must be explicitly refreshed before its Proposal can be accepted or revised.
 
 **Article change**:
 One element of a Proposal: creating, updating or retiring a single Article. Each is decided on independently.

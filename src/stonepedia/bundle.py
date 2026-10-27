@@ -122,6 +122,34 @@ def set_field(meta: dict, dotted: str, value) -> None:
     node[keys[-1]] = value
 
 
+def infer_id_scheme(root: Path, preferred_prefix: str = "") -> tuple[str, str, int, str]:
+    """Infer (field, prefix, digits, warning) from imported Article IDs."""
+    candidates: dict[str, list[str]] = {}
+
+    def visit(node: dict, path: str = "") -> None:
+        for key, value in node.items():
+            field = f"{path}.{key}" if path else key
+            if isinstance(value, dict):
+                visit(value, field)
+            elif (key == "id" or key.endswith("_id")) and value not in (None, ""):
+                candidates.setdefault(field, []).append(str(value))
+
+    for _, meta in articles(root):
+        visit(meta)
+    if not candidates:
+        return "id", preferred_prefix, 2, ""
+    if len(candidates) != 1:
+        return "id", preferred_prefix, 2, f"Could not choose an ID field: {', '.join(sorted(candidates))}. Set it in Bundle settings."
+    field, values = next(iter(candidates.items()))
+    matches = [re.fullmatch(r"(.+?)(\d+)", value) for value in values]
+    prefixes = {match.group(1) for match in matches if match}
+    if len(prefixes) == 1 and all(matches) and (not preferred_prefix or preferred_prefix in prefixes):
+        return field, preferred_prefix or next(iter(prefixes)), max(len(match.group(2)) for match in matches), ""
+    warning = (f"Existing IDs in {field} do not share a prefix-number pattern. "
+               "Review ID generation in Bundle settings before adding Articles.")
+    return field, preferred_prefix, 2, warning
+
+
 def assign_ids(root: Path, settings: BundleSettings, paths: list[str]) -> dict[str, str]:
     """Give each of `paths` (Articles relative to root) the next id if it has none. Returns path -> id."""
     if not settings.id_prefix:

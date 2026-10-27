@@ -29,6 +29,7 @@ def settings(tmp_path: Path) -> Settings:
         temporal_address="unused",
         namespace="default",
         data_dir=tmp_path,
+        reference_root=tmp_path / "references",
         agent="fake",
     )
 

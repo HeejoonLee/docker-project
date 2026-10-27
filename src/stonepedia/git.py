@@ -17,6 +17,7 @@ _ENV = {
     "GIT_CONFIG_KEY_0": "safe.directory",
     "GIT_CONFIG_VALUE_0": "*",
     "GIT_TERMINAL_PROMPT": "0",
+    "GIT_SSH_COMMAND": "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes",
 }
 
 

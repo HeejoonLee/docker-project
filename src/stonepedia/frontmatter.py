@@ -30,7 +30,8 @@ def update(text: str, **fields) -> str:
 SYSTEM_FIELDS = ("status", "sources", "generated", "review")
 
 
-def finalize(content: str, base_content: str | None, generated: dict, source_entry: dict | None = None) -> str:
+def finalize(content: str, base_content: str | None, generated: dict, source_entry: dict | None = None,
+             code_sources: list[dict] | None = None) -> str:
     """Make an agent-written Article safe to propose.
 
     System fields are removed and rewritten (`status: proposed`, `generated`, `sources` = the
@@ -42,9 +43,13 @@ def finalize(content: str, base_content: str | None, generated: dict, source_ent
     for key, value in base_meta.items():
         if key not in meta and key not in SYSTEM_FIELDS:
             meta[key] = value
+    meta.pop("code_refs", None)  # agent input; validated citations live in sources
     for key in SYSTEM_FIELDS:
         meta.pop(key, None)
     sources = list(base_meta.get("sources") or [])
+    if code_sources is not None:
+        sources = [s for s in sources if not (isinstance(s, dict) and s.get("kind") == "code")]
+        sources.extend(code_sources)
     if source_entry and not any(isinstance(s, dict) and s.get("id") == source_entry["id"] for s in sources):
         sources.append(source_entry)
     if sources:

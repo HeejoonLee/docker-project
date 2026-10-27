@@ -5,7 +5,7 @@ import { useI18n } from '../i18n'
 import { ErrorBox } from '../ui'
 import { useUser } from '../user'
 
-const KINDS: SourceKind[] = ['text', 'file', 'link', 'request']
+const KINDS: SourceKind[] = ['text', 'file', 'link', 'request', 'code']
 
 export default function NewProposal() {
   const { t } = useI18n()
@@ -20,6 +20,8 @@ export default function NewProposal() {
   const [url, setUrl] = useState('')
   const [file, setFile] = useState<File>()
   const [articles, setArticles] = useState<ArticleSummary[]>([])
+  const [reference, setReference] = useState<{ bundle: string; dir: string }>()
+  const referenceDir = reference?.bundle === bundle ? reference.dir : ''
   const [targets, setTargets] = useState<string[]>([])
   const [error, setError] = useState<unknown>()
   const [busy, setBusy] = useState(false)
@@ -36,13 +38,18 @@ export default function NewProposal() {
     api.bundle(bundle).then((b) => setArticles(b.articles), setError)
   }, [bundle, kind])
 
+  useEffect(() => {
+    if (!bundle) return
+    api.bundle(bundle).then((b) => setReference({ bundle, dir: b.reference_dir }), setError)
+  }, [bundle])
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setBusy(true)
     try {
       const p = await api.createProposal({
         bundle, kind, title, submitted_by: name,
-        text: kind === 'text' || kind === 'request' ? text : undefined,
+        text: kind === 'text' || kind === 'request' || kind === 'code' ? text : undefined,
         url: kind === 'link' ? url : undefined,
         file: kind === 'file' ? file : undefined,
         targets: kind === 'request' ? targets : undefined,
@@ -131,6 +138,13 @@ export default function NewProposal() {
             )}
           </>
         )}
+        {kind === 'code' && (
+          <label>
+            {t('new.codeFocus')}
+            <span className="hint">{referenceDir ? t('new.codeHint', { path: referenceDir }) : t('new.codeMissing')}</span>
+            <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} required />
+          </label>
+        )}
 
         <label>
           {t('new.titleOptional')}
@@ -139,7 +153,7 @@ export default function NewProposal() {
         </label>
 
         <div className="actions">
-          <button className="primary" disabled={busy || !bundle}>{busy ? t('new.uploading') : t('new.submit')}</button>
+          <button className="primary" disabled={busy || !bundle || (kind === 'code' && !referenceDir)}>{busy ? t('new.uploading') : t('new.submit')}</button>
         </div>
       </form>
     </section>

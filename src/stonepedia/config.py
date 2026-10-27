@@ -16,6 +16,7 @@ class Settings:
     temporal_ui_upstream: str = "http://localhost:8233"  # where the web app proxies /temporal/ to
     agent: Literal["claude-cli", "fake"] = "claude-cli"  # "fake" is for tests only
     timezone: str = "Asia/Seoul"  # for maintenance schedules
+    reference_root: Path = Path("/references")  # read-only host mount, worker only
 
     @property
     def bundles_dir(self) -> Path:
@@ -46,5 +47,6 @@ def load() -> Settings:
         data_dir=Path(os.environ.get("STONEPEDIA_DATA_DIR", ".data")).resolve(),
         temporal_ui_upstream=os.environ.get("STONEPEDIA_TEMPORAL_UI_UPSTREAM", "http://localhost:8233"),
         timezone=os.environ.get("STONEPEDIA_TIMEZONE", "Asia/Seoul"),
+        reference_root=Path(os.environ.get("STONEPEDIA_REFERENCE_ROOT", "/references")).resolve(),
         agent="fake" if os.environ.get("STONEPEDIA_AGENT") == "fake" else "claude-cli",
     )

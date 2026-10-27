@@ -6,7 +6,8 @@ import { ErrorBox, formatTime } from '../ui'
 import { usePoll } from '../usePoll'
 import { GitCredentialsFields } from '../GitCredentialsFields'
 
-const EMPTY: NewBundle = { slug: '', name: '', language: 'ko', id_prefix: '', clone_url: '', branch: '', root: '.', remote_url: '' }
+const EMPTY: NewBundle = { slug: '', name: '', language: 'ko', id_prefix: '', clone_url: '', branch: '', root: '.', remote_url: '',
+  reference_dir: '', reference_excludes: ['.git', '.env*', 'node_modules', '.venv', 'dist', 'build'] }
 
 export default function Bundles() {
   const { t } = useI18n()
@@ -15,6 +16,7 @@ export default function Bundles() {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<'empty' | 'clone'>('empty')
   const [form, setForm] = useState<NewBundle>(EMPTY)
+  const [referenceExcludes, setReferenceExcludes] = useState(EMPTY.reference_excludes.join('\n'))
   const [error, setError] = useState<unknown>()
   const [busy, setBusy] = useState(false)
   const set = (patch: Partial<NewBundle>) => setForm({ ...form, ...patch })
@@ -27,6 +29,7 @@ export default function Bundles() {
       const body = mode === 'empty'
         ? { ...form, clone_url: '', branch: '', root: '.', name: form.name || form.slug }
         : { ...form, remote_url: '', name: form.name || form.slug }
+      body.reference_excludes = referenceExcludes.split('\n').map((p) => p.trim()).filter(Boolean)
       const b = await api.createBundle(body)
       navigate(`/bundles/${b.slug}`)
     } catch (err) {
@@ -89,6 +92,16 @@ export default function Bundles() {
             {t('bundles.idPrefix')}
             <span className="hint">{t('bundles.idPrefixHint')}</span>
             <input value={form.id_prefix} onChange={(e) => set({ id_prefix: e.target.value })} />
+          </label>
+          <label>
+            {t('bundles.referenceDir')}
+            <span className="hint">{t('bundles.referenceDirHint')}</span>
+            <input value={form.reference_dir} onChange={(e) => set({ reference_dir: e.target.value })} placeholder="project-a" />
+          </label>
+          <label>
+            {t('bundles.referenceExcludes')}
+            <span className="hint">{t('bundles.referenceExcludesHint')}</span>
+            <textarea rows={3} value={referenceExcludes} onChange={(e) => setReferenceExcludes(e.target.value)} />
           </label>
           {mode === 'empty' && (
             <label>

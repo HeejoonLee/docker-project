@@ -31,6 +31,14 @@ export default function BundlePage() {
         </div>
         <Link className="button primary" to={`/new?bundle=${b.slug}`}>{t('nav.new')}</Link>
       </div>
+      {b.import_findings.length > 0 && (
+        <details className="card" open>
+          <summary>{t('bundles.importFindings', { count: String(b.import_findings.length) })}</summary>
+          <ul>{b.import_findings.map((finding, i) => (
+            <li key={`${finding.kind}-${finding.path}-${i}`}><strong>{finding.severity}</strong> · <code>{finding.path}</code> — {finding.message}</li>
+          ))}</ul>
+        </details>
+      )}
       <nav className="tabs page-tabs">
         {(['articles', 'settings', 'template'] as const).map((k) => (
           <button key={k} className={tab === k ? 'active' : ''} onClick={() => setParams({ tab: k })}>{t(`bundle.tab.${k}`)}</button>
@@ -112,6 +120,8 @@ function SettingsForm({ b, onSaved }: { b: BundleDetail; onSaved: (d: BundleDeta
   const [s, setS] = useState<BundleSettings>(b.settings)
   const [remote, setRemote] = useState(b.remote_url)
   const [branch, setBranch] = useState(b.branch)
+  const [referenceDir, setReferenceDir] = useState(b.reference_dir)
+  const [referenceExcludes, setReferenceExcludes] = useState(b.reference_excludes.join('\n'))
   const [credentials, setCredentials] = useState<GitCredentials>({ git_username: b.git_username })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>()
@@ -121,9 +131,12 @@ function SettingsForm({ b, onSaved }: { b: BundleDetail; onSaved: (d: BundleDeta
   const save = async () => {
     setBusy(true)
     try {
-      const updated = await api.saveBundleSettings(b.slug, { editor: name, settings: s, remote_url: remote, branch, ...credentials })
+      const updated = await api.saveBundleSettings(b.slug, { editor: name, settings: s, remote_url: remote, branch,
+        reference_dir: referenceDir, reference_excludes: referenceExcludes.split('\n').map((p) => p.trim()).filter(Boolean), ...credentials })
       onSaved(updated)
       setRemote(updated.remote_url)
+      setReferenceDir(updated.reference_dir)
+      setReferenceExcludes(updated.reference_excludes.join('\n'))
       setCredentials({ git_username: updated.git_username, git_token: '', remove_git_token: false })
       setSaved(true)
       setError(undefined)
@@ -164,6 +177,16 @@ function SettingsForm({ b, onSaved }: { b: BundleDetail; onSaved: (d: BundleDeta
         }} />
       </label>
       <label>{t('bset.branch')}<input value={branch} onChange={(e) => { setSaved(false); setBranch(e.target.value) }} /></label>
+      <label>
+        {t('bundles.referenceDir')}
+        <span className="hint">{t('bundles.referenceDirHint')}</span>
+        <input value={referenceDir} onChange={(e) => { setSaved(false); setReferenceDir(e.target.value) }} />
+      </label>
+      <label>
+        {t('bundles.referenceExcludes')}
+        <span className="hint">{t('bundles.referenceExcludesHint')}</span>
+        <textarea rows={3} value={referenceExcludes} onChange={(e) => { setSaved(false); setReferenceExcludes(e.target.value) }} />
+      </label>
       {b.git_token_configured && remote.trim() !== b.remote_url && <p className="hint">{t('git.newRemote')}</p>}
       <GitCredentialsFields value={credentials} configured={b.git_token_configured && remote.trim() === b.remote_url}
         onChange={(patch) => { setSaved(false); setCredentials({ ...credentials, ...patch }) }} />

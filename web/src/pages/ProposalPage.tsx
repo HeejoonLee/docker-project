@@ -14,7 +14,8 @@ export default function ProposalPage() {
   const { id = '' } = useParams()
   const { t } = useI18n()
   const { name } = useUser()
-  const { data: p, error, setData } = usePoll(() => api.proposal(id), id, 2000, (d) => !d || BUSY.has(d.state))
+  const { data: p, error, setData } = usePoll(() => api.proposal(id), id, 5000,
+    (d) => !d || BUSY.has(d.state) || (d.state === 'awaiting_review' && d.reference_used))
   const [actionError, setActionError] = useState<unknown>()
   const [feedback, setFeedback] = useState('')
   // Cards start collapsed when there are many, so the overview fits on screen.
@@ -66,6 +67,13 @@ export default function ProposalPage() {
       {p.state === 'done' && <p className="notice ok">{t('proposal.committed', { commit: (p.commit ?? '').slice(0, 8), name: p.reviewer ?? '' })}</p>}
       {p.state === 'discarded' && <p className="notice">{t('proposal.discardedAll', { name: p.reviewer ?? '' })}</p>}
       {p.error && <div className="error">{p.error}</div>}
+      {reviewable && p.code_stale_paths.length > 0 && (
+        <div className="error">
+          <strong>{t('proposal.codeStale')}</strong>
+          <p>{p.code_stale_paths.map((path) => <code key={path} className="path">{path} </code>)}</p>
+          <button onClick={() => act(() => api.refreshCode(p.id, name))}>{t('proposal.refreshCode')}</button>
+        </div>
+      )}
       <ErrorBox error={actionError} />
 
       {p.summary && (

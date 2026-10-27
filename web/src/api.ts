@@ -15,7 +15,7 @@ export interface ArticleChange {
   history: { content: string; replaced_by: 'revise' | 'edit' | 'feedback'; note: string; by: string; at: string }[]
 }
 
-export type SourceKind = 'text' | 'file' | 'link' | 'request' | 'audit'
+export type SourceKind = 'text' | 'file' | 'link' | 'request' | 'code' | 'audit'
 
 export interface SourceInfo {
   id: string
@@ -47,6 +47,8 @@ export interface Proposal {
   summary: string
   cost_usd: number
   runs: number
+  reference_used: boolean
+  code_stale_paths: string[]
 }
 
 export interface ProposalSummary {
@@ -83,6 +85,9 @@ export interface BundleDetail {
   push: PushState
   head: string | null
   articles: ArticleSummary[]
+  reference_dir: string
+  reference_excludes: string[]
+  import_findings: Finding[]
 }
 export interface TypeDef { name: string; rule: string; sections: string[] }
 export interface FieldDef { name: string; written_by: 'ai' | 'system'; required: boolean; description: string }
@@ -104,6 +109,7 @@ export interface GitCredentials {
 export interface NewBundle extends GitCredentials {
   slug: string; name: string; language: string; id_prefix: string
   clone_url: string; branch: string; root: string; remote_url: string
+  reference_dir: string; reference_excludes: string[]
 }
 export interface AppConfig { temporal_ui_url: string; namespace: string }
 export interface Settings {
@@ -141,7 +147,7 @@ export const api = {
   article: (slug: string, path: string) =>
     request<{ path: string; content: string }>('GET', `/api/bundles/${slug}/articles/${path}`),
   createBundle: (b: NewBundle) => request<BundleSummary>('POST', '/api/bundles', b),
-  saveBundleSettings: (slug: string, body: GitCredentials & { editor: string; settings: BundleSettings; remote_url: string; branch: string }) =>
+  saveBundleSettings: (slug: string, body: GitCredentials & { editor: string; settings: BundleSettings; remote_url: string; branch: string; reference_dir: string; reference_excludes: string[] }) =>
     request<BundleDetail>('PUT', `/api/bundles/${slug}/settings`, body),
   template: (slug: string, inferred = false) =>
     request<Template>('GET', `/api/bundles/${slug}/template${inferred ? '?inferred=true' : ''}`),
@@ -187,4 +193,5 @@ export const api = {
   saveSettings: (s: Settings) => request<Settings>('PUT', '/api/settings', s),
   testAgent: () => request<AgentCheck>('POST', '/api/settings/test'),
   submit: (id: string, reviewer: string) => request<Proposal>('POST', `/api/proposals/${id}/submit`, { reviewer }),
+  refreshCode: (id: string, reviewer: string) => request<Proposal>('POST', `/api/proposals/${id}/refresh-code`, { reviewer }),
 }

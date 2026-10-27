@@ -1,4 +1,5 @@
 import pytest
+import shlex
 
 from stonepedia import git
 
@@ -40,6 +41,24 @@ def test_http_credentials_encoded_and_hidden():
     assert git.with_http_credentials(authenticated, None, "") == authenticated
     assert git.with_http_credentials(authenticated, None, remove=True) == url
     assert git.http_credentials(git.with_http_credentials(url, None, "token")) == ("oauth2", "token")
+
+
+def test_ssh_url_uses_explicit_gerrit_port(tmp_path, monkeypatch):
+    remote = tmp_path / "remote.git"
+    remote.mkdir()
+    git.git(remote, "init", "-q", "--bare", "-b", "main")
+    arguments = tmp_path / "ssh-args"
+    transport = tmp_path / "ssh-transport"
+    transport.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$@\" > {shlex.quote(str(arguments))}\n"
+        f"exec git-upload-pack {shlex.quote(str(remote))}\n"
+    )
+    transport.chmod(0o755)
+    monkeypatch.setitem(git._ENV, "GIT_SSH_COMMAND", str(transport))
+    monkeypatch.setitem(git._ENV, "GIT_SSH_VARIANT", "ssh")
+    git.clone("ssh://user@gerrit.intra:29418/project.git", tmp_path / "clone")
+    assert "-p\n29418\n" in arguments.read_text()
 
 
 @pytest.mark.parametrize("url", ["", "/tmp/remote.git", "git@gitlab.intra:repo.git", "https:///repo.git"])

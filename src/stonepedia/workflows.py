@@ -8,7 +8,7 @@ from temporalio.common import RetryPolicy, SearchAttributePair, TypedSearchAttri
 from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from stonepedia import config, frontmatter, search
+    from stonepedia import config, frontmatter, references, search
     from stonepedia.activities import Activities
     from stonepedia.models import (
         AgentCheck,
@@ -150,6 +150,13 @@ class BundleWorkflow:
         await workflow.wait_condition(lambda: self._ready)
         assert self._spec is not None
         async with self._lock:
+            if req.reference_dir is not None:
+                await workflow.execute_activity_method(
+                    Activities.validate_reference, req.reference_dir, start_to_close_timeout=_SHORT, retry_policy=_RETRY
+                )
+                self._spec.reference_dir = req.reference_dir
+            if req.reference_excludes is not None:
+                self._spec.reference_excludes = req.reference_excludes
             if req.remote_url is not None or req.branch is not None:
                 self._spec.remote_url = req.remote_url if req.remote_url is not None else self._spec.remote_url
                 self._spec.branch = req.branch or self._spec.branch
@@ -296,6 +303,8 @@ class ProposalWorkflow:
     def _merge(self, job: AgentJob, outcome: AgentOutcome) -> None:
         if job.mode == "propose":
             self._view.changes = outcome.changes
+            self._view.reference_used = any(references.citations_from_content(c.content) for c in self._view.changes)
+            self._view.code_stale_paths = []
             return
         now = workflow.now().isoformat(timespec="seconds")
         new_by_path = {c.path: c for c in outcome.changes}
@@ -310,6 +319,8 @@ class ProposalWorkflow:
                     _replace(old, new, ChangeVersion(
                         content=old.content, replaced_by="revise", note=job.feedback, by=job.feedback_by, at=now
                     ))
+            self._view.reference_used = any(references.citations_from_content(c.content) for c in self._view.changes)
+            self._view.code_stale_paths = []
             return
         # Whole-Proposal feedback: accepted changes stay, pending ones may change or be withdrawn.
         merged: list[ArticleChange] = []
@@ -331,6 +342,19 @@ class ProposalWorkflow:
             merged.append(old)
         order = {c.path: i for i, c in enumerate(self._view.changes)}
         self._view.changes = sorted(merged, key=lambda c: order.get(c.path, len(order)))
+        self._view.reference_used = any(references.citations_from_content(c.content) for c in self._view.changes)
+        self._view.code_stale_paths = []
+
+    async def _check_code(self) -> list[str]:
+        if not self._view.reference_used:
+            self._view.code_stale_paths = []
+            return []
+        contents = [c.content for c in self._view.changes if c.decision != "discarded"]
+        self._view.code_stale_paths = await workflow.execute_activity_method(
+            Activities.check_reference, args=[self._view.bundle, contents],
+            start_to_close_timeout=_SHORT, retry_policy=_RETRY,
+        )
+        return self._view.code_stale_paths
 
     # ---------- Commit ----------
 
@@ -343,6 +367,11 @@ class ProposalWorkflow:
             self._view.reviewer = reviewer
             self._set_state("discarded")
             return True
+        if await self._check_code():
+            self._view.error = "Cited code changed. Refresh the Proposal before submitting."
+            self._submitted_by = None
+            self._set_state("awaiting_review")
+            return False
         self._set_state("committing")
         try:
             result = await workflow.execute_activity_method(
@@ -374,6 +403,15 @@ class ProposalWorkflow:
             self._submitted_by = None
             self._set_state("awaiting_review")
             return False
+        if result.stale_code_paths:
+            self._view.code_stale_paths = result.stale_code_paths
+            for change in self._view.changes:
+                if any(c.get("path") in result.stale_code_paths for c in references.citations_from_content(change.content)):
+                    change.decision = "pending"
+            self._view.error = "Cited code changed. Refresh the Proposal before submitting."
+            self._submitted_by = None
+            self._set_state("awaiting_review")
+            return False
         self._view.commit = result.commit
         self._view.reviewer = reviewer
         self._view.error = None
@@ -387,7 +425,15 @@ class ProposalWorkflow:
         return self._view
 
     @workflow.update
-    def decide(self, change_id: str, decision: Decision) -> ProposalView:
+    async def check_code(self) -> ProposalView:
+        if self._view.state == "awaiting_review":
+            await self._check_code()
+        return self._view
+
+    @workflow.update
+    async def decide(self, change_id: str, decision: Decision) -> ProposalView:
+        if decision == "accepted" and await self._check_code():
+            raise ApplicationError("Cited code changed. Refresh the Proposal before accepting.")
         self._change(change_id).decision = decision
         return self._view
 
@@ -399,7 +445,9 @@ class ProposalWorkflow:
             raise ApplicationError("This change is stale; revise or edit it before accepting.")
 
     @workflow.update
-    def revise(self, change_id: str, feedback: str, reviewer: str) -> ProposalView:
+    async def revise(self, change_id: str, feedback: str, reviewer: str) -> ProposalView:
+        if await self._check_code():
+            raise ApplicationError("Cited code changed. Refresh the Proposal before revising.")
         change = self._change(change_id)
         job = self._job("revise", feedback=feedback, targets=[change.path])
         job.feedback_by = reviewer
@@ -414,7 +462,9 @@ class ProposalWorkflow:
             raise ApplicationError("Undo the decision on this change before revising it.")
 
     @workflow.update
-    def feedback(self, text: str, reviewer: str) -> ProposalView:
+    async def feedback(self, text: str, reviewer: str) -> ProposalView:
+        if await self._check_code():
+            raise ApplicationError("Cited code changed. Refresh the Proposal before revising.")
         job = self._job("feedback", feedback=text)
         job.feedback_by = reviewer
         self._jobs.append(job)
@@ -426,6 +476,21 @@ class ProposalWorkflow:
         self._require_reviewable()
         if not text.strip():
             raise ApplicationError("Write the feedback first.")
+
+    @workflow.update
+    async def refresh_code(self, reviewer: str) -> ProposalView:
+        self._require_reviewable()
+        stale = await self._check_code()
+        if not stale:
+            return self._view
+        for change in self._view.changes:
+            if any(c.get("path") in stale for c in references.citations_from_content(change.content)):
+                change.decision = "pending"
+        job = self._job("feedback", feedback="Refresh the proposed Articles against the current code. Re-read and cite current files.")
+        job.feedback_by = reviewer
+        self._jobs.append(job)
+        self._set_state("generating")
+        return self._view
 
     @workflow.update
     async def edit(self, change_id: str, content: str, editor: str) -> ProposalView:
@@ -446,6 +511,7 @@ class ProposalWorkflow:
         change.edited_by = editor
         meta, _ = frontmatter.split(content)
         change.title = str(meta.get("title", change.title))
+        self._view.reference_used = any(references.citations_from_content(c.content) for c in self._view.changes)
         return self._view
 
     @edit.validator
@@ -457,7 +523,9 @@ class ProposalWorkflow:
             raise ApplicationError("The Article cannot be empty; discard the change instead.")
 
     @workflow.update
-    def submit(self, reviewer: str) -> ProposalView:
+    async def submit(self, reviewer: str) -> ProposalView:
+        if any(c.decision == "accepted" for c in self._view.changes) and await self._check_code():
+            raise ApplicationError("Cited code changed. Refresh the Proposal before submitting.")
         self._submitted_by = reviewer
         return self._view
 

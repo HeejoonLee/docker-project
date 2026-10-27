@@ -20,8 +20,8 @@ Replace `YOUR_USERNAME` in all commands and configuration below with your Docker
 Hub username. Use the same version tag throughout.
 
 ```bash
-docker build -t YOUR_USERNAME/stonepedia:0.2.0 .
-docker push YOUR_USERNAME/stonepedia:0.2.0
+docker build -t YOUR_USERNAME/stonepedia:0.2.1 .
+docker push YOUR_USERNAME/stonepedia:0.2.1
 ```
 
 The image includes the web UI, API, worker, and deployment configuration.
@@ -39,7 +39,7 @@ can read the repository (login is optional for public images). Replace
 docker login
 mkdir -p ~/stonepedia
 cd ~/stonepedia
-IMAGE=YOUR_USERNAME/stonepedia:0.2.0
+IMAGE=YOUR_USERNAME/stonepedia:0.2.1
 docker pull "$IMAGE"
 docker run --rm "$IMAGE" python -m stonepedia.deploy --image "$IMAGE" > compose.yaml
 ```
@@ -125,7 +125,7 @@ For an update, build and push a new image tag on the build machine. On the serve
 generate the updated configuration, validate it, then replace the old file:
 
 ```bash
-IMAGE=YOUR_USERNAME/stonepedia:0.2.0
+IMAGE=YOUR_USERNAME/stonepedia:0.2.1
 docker pull "$IMAGE"
 docker run --rm "$IMAGE" python -m stonepedia.deploy --image "$IMAGE" > compose.next.yaml
 docker compose -f compose.next.yaml config --quiet

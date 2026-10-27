@@ -19,23 +19,23 @@ Both machines must have the same CPU architecture, such as x86-64.
 From the project directory, with the release commit checked out:
 
 ```bash
-VERSION=0.2.0 make bundle && \
-  (cd dist && sha256sum stonepedia-0.2.0.tar > stonepedia-0.2.0.tar.sha256)
+VERSION=0.2.1 make bundle && \
+  (cd dist && sha256sum stonepedia-0.2.1.tar > stonepedia-0.2.1.tar.sha256)
 ```
 
-This writes `dist/stonepedia-0.2.0.tar` (about 750 MB). Without `VERSION`, the
-name also contains the commit hash, such as `stonepedia-0.2.0-3d897dd.tar`.
+This writes `dist/stonepedia-0.2.1.tar` (about 750 MB). Without `VERSION`, the
+name also contains the commit hash, such as `stonepedia-0.2.1-3d897dd.tar`.
 
 ## 2. Publish the Release — build machine
 
 The repository needs a GitHub remote and the commit must be pushed. Then:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
-gh release create v0.2.0 \
-  dist/stonepedia-0.2.0.tar dist/stonepedia-0.2.0.tar.sha256 \
-  --title "Stonepedia 0.2.0" --notes "Install: see INSTALL.md inside the tar."
+git tag v0.2.1
+git push origin v0.2.1
+gh release create v0.2.1 \
+  dist/stonepedia-0.2.1.tar dist/stonepedia-0.2.1.tar.sha256 \
+  --title "Stonepedia 0.2.1" --notes "Install: see INSTALL.md inside the tar."
 ```
 
 Upload the package as a Release asset, never as a committed file: GitHub rejects
@@ -49,34 +49,34 @@ Pick whichever works on your network.
 - **GitHub CLI** (works for private repositories):
 
   ```bash
-  gh release download v0.2.0 -R OWNER/stonepedia
+  gh release download v0.2.1 -R OWNER/stonepedia
   ```
 
 - **curl** (public repositories only):
 
   ```bash
-  curl -LO https://github.com/OWNER/stonepedia/releases/download/v0.2.0/stonepedia-0.2.0.tar
-  curl -LO https://github.com/OWNER/stonepedia/releases/download/v0.2.0/stonepedia-0.2.0.tar.sha256
+  curl -LO https://github.com/OWNER/stonepedia/releases/download/v0.2.1/stonepedia-0.2.1.tar
+  curl -LO https://github.com/OWNER/stonepedia/releases/download/v0.2.1/stonepedia-0.2.1.tar.sha256
   ```
 
 - **Browser, then copy:** if the server cannot reach GitHub, download both
   files on your PC from the Release page and copy them over:
 
   ```bash
-  scp stonepedia-0.2.0.tar stonepedia-0.2.0.tar.sha256 USER@SERVER:~
+  scp stonepedia-0.2.1.tar stonepedia-0.2.1.tar.sha256 USER@SERVER:~
   ```
 
 Replace `OWNER` with the GitHub user or organization. Then check the download:
 
 ```bash
-sha256sum -c stonepedia-0.2.0.tar.sha256
+sha256sum -c stonepedia-0.2.1.tar.sha256
 ```
 
 ## 4. Install and start — target server
 
 ```bash
-tar -xf stonepedia-0.2.0.tar
-cd stonepedia-0.2.0
+tar -xf stonepedia-0.2.1.tar
+cd stonepedia-0.2.1
 docker load -i images.tar.gz
 cp .env.example .env
 docker compose up -d
@@ -107,7 +107,7 @@ Build and publish a new version as in steps 1–3, then on the server:
 ```bash
 tar -xf stonepedia-0.3.0.tar
 cd stonepedia-0.3.0
-cp ../stonepedia-0.2.0/.env .
+cp ../stonepedia-0.2.1/.env .
 docker load -i images.tar.gz
 docker compose up -d
 ```

@@ -12,11 +12,11 @@ from stonepedia.agent import AgentConfigError, AgentError
 TOOLS = "Read,Glob,Grep,Write,Edit"
 
 
-def command(settings_file: Path) -> list[str]:
+def command(settings_file: Path, add_dirs: list[Path] | None = None) -> list[str]:
     binary = os.environ.get("STONEPEDIA_CLAUDE_BIN", "claude")
     if shutil.which(binary) is None:
         raise AgentConfigError(f"Claude Code CLI not found ({binary}). Is it installed in the worker image?")
-    return [
+    args = [
         binary,
         "-p",
         "--restricted",  # no shell/web tools, ignores user/project settings, file tools stay in the workspace
@@ -27,6 +27,9 @@ def command(settings_file: Path) -> list[str]:
         "--output-format", "json",
         "--no-session-persistence",
     ]
+    for path in add_dirs or []:
+        args.extend(["--add-dir", str(path)])
+    return args
 
 
 async def run(
@@ -35,6 +38,7 @@ async def run(
     settings_file: Path,
     timeout_s: float,
     heartbeat: Callable[[], None] = lambda: None,
+    add_dirs: list[Path] | None = None,
 ) -> tuple[str, float | None]:
     """Returns (the agent's final message, cost in USD if reported)."""
     env = {
@@ -43,7 +47,7 @@ async def run(
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     }
     proc = await asyncio.create_subprocess_exec(
-        *command(settings_file),
+        *command(settings_file, add_dirs),
         cwd=workspace,
         env=env,
         stdin=asyncio.subprocess.PIPE,

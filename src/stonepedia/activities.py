@@ -18,7 +18,7 @@ from temporalio import activity
 from temporalio.client import Client
 from temporalio.exceptions import ApplicationError
 
-from stonepedia import appconfig, bundle, frontmatter, git, maintenance, sources
+from stonepedia import appconfig, bundle, frontmatter, git, maintenance, references, sources
 from stonepedia.agent import TASK_DIR, AgentConfigError, AgentError, claude, fake, prompt
 from stonepedia.bundle import BundleSettings, Template
 from stonepedia.config import Settings
@@ -73,8 +73,11 @@ class Activities:
     @activity.defn
     def init_bundle(self, spec: BundleSpec) -> BundleInit:
         """Create a Bundle repo, or clone an existing one and set it up for Stonepedia."""
+        if spec.reference_dir:
+            references.resolve(self.settings.reference_root, spec.reference_dir)
         repo = self._repo(spec.slug)
-        if (repo / ".git").exists() and (repo / spec.root / ".stonepedia" / "bundle.yaml").exists():
+        if ((repo / ".git").exists() and (repo / spec.root / ".stonepedia" / "bundle.yaml").exists()
+                and git.is_clean(repo)):
             return BundleInit(head=git.head(repo), branch=git.current_branch(repo))  # retry after success
         if repo.exists():
             shutil.rmtree(repo)  # leftovers of a failed attempt
@@ -92,23 +95,41 @@ class Activities:
             raise ApplicationError(f"The folder '{spec.root}' does not exist in that repository.", non_retryable=True)
         root.mkdir(parents=True, exist_ok=True)
 
-        imported = spec.clone_url != ""
-        settings = BundleSettings(
-            name=spec.name,
-            language=spec.language,
-            id_prefix=spec.id_prefix,
-            generate_index=not (imported and (root / "index.md").exists()),
-            generate_manifest=not (imported and (root / "manifest.json").exists()),
-        )
-        bundle.save_settings(root, settings)
-        if not (bundle.meta_dir(root) / "template.yaml").exists():
-            template = bundle.infer_template(root) if imported and bundle.articles(root) else bundle.load_template(root)
-            bundle.save_template(root, template)
-        bundle.regenerate(root, settings)
-        git.set_remote(repo, spec.remote_url or spec.clone_url)
-        message = "Set up Stonepedia" if imported else f"Create bundle {spec.name}"
-        head = git.commit_all(repo, message, git.SYSTEM_AUTHOR)
-        return BundleInit(head=head, branch=git.current_branch(repo))
+        try:
+            imported = spec.clone_url != ""
+            id_field, id_prefix, id_digits, _ = bundle.infer_id_scheme(root, spec.id_prefix) if imported else ("id", spec.id_prefix, 2, "")
+            settings = BundleSettings(
+                name=spec.name,
+                language=spec.language,
+                id_prefix=id_prefix,
+                id_field=id_field,
+                id_digits=id_digits,
+                generate_index=not (imported and (root / "index.md").exists()),
+                generate_manifest=not (imported and (root / "manifest.json").exists()),
+            )
+            bundle.save_settings(root, settings)
+            if not (bundle.meta_dir(root) / "template.yaml").exists():
+                template = bundle.infer_template(root) if imported and bundle.articles(root) else bundle.load_template(root)
+                bundle.save_template(root, template)
+            bundle.regenerate(root, settings)
+            git.set_remote(repo, spec.remote_url or spec.clone_url)
+            message = "Set up Stonepedia" if imported else f"Create bundle {spec.name}"
+            head = git.commit_all(repo, message, git.SYSTEM_AUTHOR)
+            return BundleInit(head=head, branch=git.current_branch(repo))
+        except (yaml.YAMLError, ValueError, git.GitError) as err:
+            shutil.rmtree(repo, ignore_errors=True)
+            raise ApplicationError(f"Could not set up the Bundle: {err}", non_retryable=True) from err
+
+    @activity.defn
+    def validate_reference(self, subdir: str) -> None:
+        if subdir:
+            references.resolve(self.settings.reference_root, subdir)
+
+    @activity.defn
+    async def check_reference(self, bundle_slug: str, contents: list[str]) -> list[str]:
+        spec = await self._spec(bundle_slug)
+        items = [item for content in contents for item in references.citations_from_content(content)]
+        return references.changed(self.settings.reference_root, spec, items)
 
     @activity.defn
     def save_bundle_config(
@@ -192,7 +213,14 @@ class Activities:
         repo = self._repo(job.bundle)
         if not (repo / ".git").exists():
             raise ApplicationError(f"No Bundle repo for '{job.bundle}'", non_retryable=True)
-        job.root = (await self._spec(job.bundle)).root
+        spec = await self._spec(job.bundle)
+        job.root = spec.root
+        try:
+            reference = references.resolve(self.settings.reference_root, spec.reference_dir)
+        except ValueError as err:
+            raise ApplicationError(str(err), non_retryable=True) from err
+        job.reference_dir = str(reference) if reference else ""
+        job.reference_excludes = spec.reference_excludes
         cfg = appconfig.load(self.settings.config_dir)
         workspace = self.settings.scratch_dir / f"{job.proposal_id}-{job.attempt_key or 'run'}-{activity.info().attempt}"
         ws_root = workspace / job.root
@@ -212,9 +240,10 @@ class Activities:
                     self._claude_settings_file(),
                     timeout_s=cfg.agent_timeout_minutes * 60,
                     heartbeat=activity.heartbeat,
+                    add_dirs=[reference] if reference else None,
                 )
                 agent_name = "claude-code"
-            changes = await asyncio.to_thread(_collect_changes, workspace, job, agent_name)
+            changes = await asyncio.to_thread(_collect_changes, workspace, job, agent_name, spec, reference)
             return AgentOutcome(changes=changes, summary=summary, agent=agent_name, cost_usd=cost)
         except AgentConfigError as err:
             raise ApplicationError(str(err), non_retryable=True) from err
@@ -281,6 +310,10 @@ class Activities:
         stale = [c.id for c in req.changes if git.blob(repo, _in_root(spec.root, c.path)) != c.base_blob]
         if stale:
             return CommitResult(stale_ids=stale)
+        code_items = [item for change in req.changes for item in references.citations_from_content(change.content)]
+        code_stale = references.changed(self.settings.reference_root, spec, code_items)
+        if code_stale:
+            return CommitResult(stale_code_paths=code_stale)
         now = _now()
         if req.source_id:
             staged = self.settings.sources_dir / req.source_id
@@ -380,6 +413,8 @@ class Activities:
     def all(self) -> list:
         return [
             self.init_bundle,
+            self.validate_reference,
+            self.check_reference,
             self.save_bundle_config,
             self.set_remote,
             self.sync_bundle,
@@ -459,12 +494,14 @@ def _with_preview(info: SourceInfo, folder: Path) -> SourceInfo:
     return info
 
 
-def _collect_changes(workspace: Path, job: AgentJob, agent_name: str) -> list[ArticleChange]:
+def _collect_changes(workspace: Path, job: AgentJob, agent_name: str, spec: BundleSpec,
+                     reference: Path | None) -> list[ArticleChange]:
     """Article changes in the workspace relative to HEAD: edits, new files, and deletions (= retire)."""
     generated = {"by": agent_name, "at": _now()}
     carried = {c.path: c.content for c in job.carried}
     prefix = "" if job.root == "." else job.root + "/"
     changes = []
+    commit = references.git_commit(reference) if reference else ""
 
     def rel_paths(paths: list[str]) -> list[str]:
         return [p[len(prefix):] for p in paths if p.startswith(prefix) and bundle.is_article(p[len(prefix):])]
@@ -478,7 +515,17 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str) -> list[Ar
             content = written  # carried over and left untouched by the agent
         else:
             cite = None if job.source.kind == "audit" else source_entry(job.source, path)
-            content = frontmatter.finalize(written, base_content, generated, cite)
+            written_meta, _ = frontmatter.split(written)
+            paths = written_meta.get("code_refs")
+            code_sources = None
+            if paths is not None:
+                if reference is None or not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+                    raise AgentError("Article code_refs must be a list of paths in the configured Reference directory.")
+                try:
+                    code_sources = [references.citation(reference, spec, p, commit) for p in dict.fromkeys(paths)]
+                except ValueError as err:
+                    raise AgentError(str(err)) from err
+            content = frontmatter.finalize(written, base_content, generated, cite, code_sources)
         meta, _ = frontmatter.split(content)
         changes.append(ArticleChange(
             id=change_id(path),
@@ -503,6 +550,8 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str) -> list[Ar
             content=frontmatter.update(base_content, status="retired"),
             title=str(meta.get("title", path)),
         ))
+    if job.source.kind == "code" and not any(references.citations_from_content(c.content) for c in changes):
+        raise AgentError("A code-only Proposal needs at least one Article citing a code file in code_refs.")
     return changes
 
 
