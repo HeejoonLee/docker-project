@@ -5,10 +5,9 @@ import { BrandMark } from './BrandMark'
 import { LOCALES, useI18n } from './i18n'
 import BundlePage from './pages/BundlePage'
 import Bundles from './pages/Bundles'
-import Inbox from './pages/Inbox'
 import MaintenancePage from './pages/MaintenancePage'
 import NewProposal from './pages/NewProposal'
-import ProposalPage from './pages/ProposalPage'
+import ReviewWorkspace from './pages/review/ReviewWorkspace'
 import SettingsPage from './pages/SettingsPage'
 import Welcome from './pages/Welcome'
 import './welcome.css'
@@ -20,9 +19,12 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route element={<Workspace />}>
-          <Route path="/inbox" element={<Inbox />} />
+          {/* One layout route for both, so the workspace stays mounted while switching Proposals. */}
+          <Route element={<ReviewWorkspace />}>
+            <Route path="/inbox" />
+            <Route path="/proposals/:id" />
+          </Route>
           <Route path="/new" element={<NewProposal />} />
-          <Route path="/proposals/:id" element={<ProposalPage />} />
           <Route path="/bundles" element={<Bundles />} />
           <Route path="/bundles/:slug" element={<BundlePage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
@@ -33,9 +35,18 @@ export default function App() {
   )
 }
 
+const isReview = (pathname: string) => pathname === '/inbox' || pathname.startsWith('/proposals/')
+
 function Workspace() {
   const { name } = useUser()
-  return <><Header /><main>{name ? <Outlet /> : <NamePrompt />}</main></>
+  const { pathname } = useLocation()
+  // The review workspace fills the window like an IDE; other pages keep the centered column.
+  return (
+    <div className={isReview(pathname) ? 'app-frame full' : 'app-frame'}>
+      <Header />
+      <main>{name ? <Outlet /> : <NamePrompt />}</main>
+    </div>
+  )
 }
 
 function Header() {
@@ -43,7 +54,7 @@ function Header() {
   const { name, setName } = useUser()
   const config = useConfig()
   const { pathname } = useLocation()
-  const inInbox = pathname === '/inbox' || pathname.startsWith('/proposals/')
+  const inInbox = isReview(pathname)
   return (
     <header className="topbar">
       <NavLink to="/" className="brand" aria-label="Stonepedia"><BrandMark /><span>Stonepedia<span className="brand-dot">.</span></span></NavLink>
