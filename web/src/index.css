@@ -149,6 +149,9 @@ button:hover:not(:disabled), .button:hover { background: var(--surface-2); borde
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.primary, .button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); box-shadow: var(--shadow-sm); }
 button.primary:hover:not(:disabled), .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-text); }
+/* Destructive actions: the app's brick red, tinted rather than filled so they don't outweigh the primary action. */
+button.danger { background: var(--bad-bg); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 14%, var(--bad-bg)); border-color: var(--bad); color: var(--bad); }
 button.link { height: auto; border: none; background: none; padding: 0; color: var(--accent); box-shadow: none; font-weight: 500; }
 button.link:hover:not(:disabled) { background: none; color: var(--accent-hover); }
 select, input, textarea { padding: 7px 10px; }

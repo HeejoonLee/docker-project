@@ -55,7 +55,7 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
                 <button className="primary" disabled={change.stale} onClick={() => onDecide('accepted')}>{t('proposal.accept')}</button>
                 <button onClick={onRevise}>{t('proposal.revise')}</button>
                 <button onClick={startEdit}>{t('proposal.edit')}</button>
-                <button onClick={() => onDecide('discarded')}>{t('proposal.discard')}</button>
+                <button className="danger" onClick={() => onDecide('discarded')}>{t('proposal.discard')}</button>
               </>
             )
           ) : (
