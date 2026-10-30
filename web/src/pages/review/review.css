@@ -19,7 +19,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 
 .pane-head {
   display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-  height: 36px; padding: 0 6px 0 14px;
+  height: 40px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--border);
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
 }
 .icon-button {
@@ -37,33 +37,37 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 }
 .chevron.open { transform: rotate(45deg); margin-bottom: 3px; }
 
-/* ---------- Sidebar ---------- */
+/* ---------- Sidebar ----------
+   One indent grid: Proposals at 12px, their folders and loose files at 28px, files in a folder at 44px.
+   Indent guides sit under the chevron of the row they belong to (17px and 33px). */
 .sidebar { flex-shrink: 0; min-width: 0; display: flex; flex-direction: column; background: var(--surface-2); }
 .side-section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.side-head { display: flex; align-items: center; gap: 2px; flex-shrink: 0; height: 30px; padding: 0 6px 0 8px; border-top: 1px solid var(--border); }
+.side-head { display: flex; align-items: center; gap: 2px; flex-shrink: 0; height: 40px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--border); }
 .side-title {
-  flex: 1; min-width: 0; justify-content: flex-start; gap: 6px; height: 28px; padding: 0 4px;
-  border: none; background: none; box-shadow: none;
-  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2);
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2);
 }
-.side-title:hover:not(:disabled) { background: none; color: var(--text); }
-.count { padding: 0 7px; border-radius: 999px; background: var(--surface-3); color: var(--muted); font-size: 0.7rem; font-weight: 600; letter-spacing: 0; }
+.count { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; background: var(--surface-3); color: var(--muted); font-size: 0.7rem; font-weight: 600; letter-spacing: 0; }
+.count-strong { background: var(--accent); color: var(--accent-text); }
 .side-body { flex: 1; min-height: 0; overflow: auto; }
-.side-body > .error { margin: 6px 10px; font-size: 0.84rem; }
-.side-filters { display: flex; flex-direction: column; gap: 6px; padding: 2px 10px 8px; }
+.side-body > .error { margin: 8px 12px; font-size: 0.84rem; }
+.side-filters { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .side-filters select { height: 30px; min-height: 30px; padding-block: 3px; font-size: 0.82rem; }
-.side-empty { margin: 8px 14px; color: var(--muted); font-size: 0.84rem; }
+.side-empty { margin: 12px 14px; color: var(--muted); font-size: 0.84rem; }
+.side-empty.nested { margin: 6px 12px 8px 28px; }
 
-.proposal-list { list-style: none; margin: 0; padding: 2px 0 6px; }
-.proposal-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px 6px 8px; color: var(--text); box-shadow: inset 2px 0 transparent; }
+.proposal-list { list-style: none; margin: 0; padding: 6px 0 10px; }
+.proposal-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; color: var(--text); }
 .proposal-row:hover { background: var(--surface-3); color: var(--text); }
 .proposal-row.active, .proposal-row.active:hover { background: var(--accent-soft); box-shadow: inset 2px 0 var(--highlight); }
-.proposal-row .chevron { margin-top: 7px; color: var(--muted); }
-.proposal-row .count { margin-top: 2px; flex-shrink: 0; }
-.proposal-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.proposal-row .chevron { margin: 7px 2px 0; color: var(--muted); }
+.proposal-row .chevron.open { margin-top: 5px; }
+.proposal-row .count { margin-top: 1px; flex-shrink: 0; }
+.proposal-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .proposal-row-title, .proposal-row-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proposal-row-title { font-size: 0.86rem; font-weight: 550; }
 .proposal-row-meta { font-size: 0.75rem; color: var(--muted); }
+.proposal-list li.expanded { background: color-mix(in srgb, var(--surface-3) 35%, transparent); }
 
 .state-dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--border-strong); }
 .state-dot.state-awaiting_review { background: var(--warn); }
@@ -71,30 +75,45 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .state-dot.state-failed { background: var(--bad); }
 .state-dot.state-generating, .state-dot.state-committing { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 
-.tree, .tree ul { list-style: none; margin: 0; padding: 0; }
-.tree { padding: 2px 0 8px; }
+.proposal-children { position: relative; padding: 2px 0 8px; }
+.proposal-children::before, .change-rows.in-folder::before { content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.proposal-children::before { left: 17px; bottom: 8px; }
+.side-progress { display: flex; align-items: center; gap: 10px; padding: 4px 14px 8px 28px; color: var(--muted); font-size: 0.76rem; white-space: nowrap; }
+.progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.progress-fill { display: block; height: 100%; background: var(--ok); transition: width 0.2s; }
+
+.change-rows { position: relative; list-style: none; margin: 0; padding: 0; }
+.change-rows.in-folder::before { left: 33px; }
 .tree-row {
-  display: flex; align-items: center; justify-content: flex-start; gap: 6px; width: 100%; height: 26px; padding: 0 8px 0 0;
+  display: flex; align-items: center; justify-content: flex-start; gap: 6px; width: 100%; height: 30px; padding: 0 12px 0 28px;
   border: none; border-radius: 0; background: none; box-shadow: none; text-align: left;
   color: var(--text); font-size: 0.85rem; font-weight: 400;
 }
 .tree-row:hover:not(:disabled) { background: var(--surface-3); }
 .tree-row.selected, .tree-row.selected:hover:not(:disabled) { background: var(--accent-soft); box-shadow: inset 2px 0 var(--highlight); }
 .tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Folders are quiet labels; each Article change is a numbered two-line item so the count is obvious at a glance. */
-.tree-file { height: auto; min-height: 48px; align-items: flex-start; gap: 8px; padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+
+.tree-folder { gap: 7px; color: var(--text-2); font-size: 0.8rem; font-weight: 550; }
+.tree-folder .chevron { margin: 0 2px; color: var(--muted); }
+.tree-folder .chevron.open { margin-bottom: 3px; }
+.folder-icon { flex-shrink: 0; color: var(--muted); }
+.tree-folder .tree-name { flex: 1; font-family: var(--mono); font-size: 0.76rem; }
+
+/* Each Article change is a numbered two-line item so the count is obvious at a glance. */
+.tree-file { height: auto; min-height: 50px; align-items: flex-start; gap: 10px; padding-top: 8px; padding-bottom: 8px; }
+.change-rows.in-folder .tree-file { padding-left: 44px; }
 .tree-index {
   flex-shrink: 0; display: inline-grid; place-items: center; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%;
   background: var(--surface-3); color: var(--text-2); font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .tree-file.selected .tree-index { background: var(--accent); color: var(--accent-text); }
-.tree-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tree-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .tree-file .tree-name { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.35; font-weight: 550; word-break: keep-all; overflow-wrap: anywhere; }
 .tree-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .tree-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
 .tree-file .tree-mark { margin-top: 2px; }
 .tree-file.decision-discarded .tree-name { color: var(--muted); text-decoration: line-through; }
-.tree-kind { flex-shrink: 0; text-align: center; font-family: var(--mono); font-size: 0.75rem; font-weight: 700; }
+.tree-kind { flex-shrink: 0; font-family: var(--mono); font-size: 0.75rem; font-weight: 700; }
 .kind-letter-create { color: var(--ok); }
 .kind-letter-update { color: var(--highlight); }
 .kind-letter-retire { color: var(--bad); }
@@ -117,7 +136,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .editor-area { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
 .editor-area > .error { margin: 0; border-radius: 0; border-width: 0 0 1px; }
 .breadcrumbs {
-  display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 30px; padding: 0 16px; overflow: hidden;
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 40px; padding: 0 16px; overflow: hidden;
   border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.8rem; white-space: nowrap;
 }
 .crumb-proposal { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); font-weight: 550; }
@@ -170,7 +189,8 @@ button.toggle.active { background: var(--accent-soft); border-color: var(--borde
 .ai-wrap { flex-shrink: 0; min-width: 0; display: flex; flex-direction: column; background: var(--surface-2); }
 .ai-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ai-scroll { flex: 1; min-height: 0; overflow: auto; }
-.ai-section { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 18px; border-top: 1px solid var(--border); }
+.ai-section { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 18px; }
+.ai-section + .ai-section { border-top: 1px solid var(--border); }
 .ai-section h3 { margin: 0; color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .ai-summary > summary { font-size: 0.86rem; font-weight: 600; }
 .ai-summary .prose { margin-top: 8px; font-size: 0.86rem; line-height: 1.6; }
@@ -207,16 +227,3 @@ button.toggle.active { background: var(--accent-soft); border-color: var(--borde
 .source-image { max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius); }
 .segmented.compact { padding: 2px; border-radius: 7px; }
 .segmented.compact button { height: 26px; padding: 0 10px; font-size: 0.8rem; border-radius: 5px; }
-
-.count-strong { background: var(--accent); color: var(--accent-text); }
-.side-progress { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 4px 12px 6px 12px; color: var(--muted); font-size: 0.76rem; white-space: nowrap; }
-.progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-.progress-fill { display: block; height: 100%; background: var(--ok); transition: width 0.2s; }
-
-/* The open Proposal's Article changes hang under it like files in a folder, with an indent guide. */
-.proposal-list li.expanded { background: color-mix(in srgb, var(--surface-3) 35%, transparent); }
-.proposal-children { position: relative; margin-left: 22px; padding-bottom: 6px; }
-.proposal-children::before { content: ""; position: absolute; left: -10px; top: 0; bottom: 6px; width: 1px; background: var(--border-strong); }
-.change-rows { list-style: none; margin: 0; padding: 0; }
-.change-rows .tree-file { padding-left: 4px; }
-.side-empty.nested { margin: 4px 12px 8px; }

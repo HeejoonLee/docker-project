@@ -13,7 +13,7 @@ export type ProposalFilter = { bundle: string; state: string }
  * The sidebar tree: a filterable queue of Proposals, newest first. The open Proposal
  * expands like a folder to list its Article changes underneath it.
  */
-export function ProposalList({ proposals, error, bundles, filter, onFilter, open, selectedChange, onSelectChange }: {
+export function ProposalList({ proposals, error, bundles, filter, onFilter, open, selectedChange, onSelectChange, onHide }: {
   proposals: ProposalSummary[] | undefined
   error: unknown
   bundles: BundleSummary[] | undefined
@@ -22,6 +22,7 @@ export function ProposalList({ proposals, error, bundles, filter, onFilter, open
   open: Proposal | undefined
   selectedChange: string | undefined
   onSelectChange: (id: string) => void
+  onHide: () => void
 }) {
   const { t } = useI18n()
   const filtered = filter.bundle !== '' || filter.state !== ''
@@ -49,6 +50,7 @@ export function ProposalList({ proposals, error, bundles, filter, onFilter, open
           <FilterIcon />
         </button>
         <Link className="icon-button" to="/new" title={t('review.newProposal')}>+</Link>
+        <button className="icon-button" onClick={onHide} title={t('review.hideSidebar')}>«</button>
       </div>
       {showFilters && (
         <div className="side-filters">

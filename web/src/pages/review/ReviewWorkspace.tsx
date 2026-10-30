@@ -9,6 +9,7 @@ import { useUser } from '../../user'
 import { AiPanel } from './AiPanel'
 import { ChangeEditor } from './ChangeEditor'
 import { Splitter, useStored } from './layout'
+import { displayOrder } from './order'
 import { ProposalList, type ProposalFilter } from './ProposalList'
 import { SourcePane } from './SourcePane'
 import './review.css'
@@ -55,7 +56,8 @@ export default function ReviewWorkspace() {
   useEffect(() => { if (focusRevise) reviseRef.current?.focus() }, [focusRevise])
 
   const changeParam = params.get('change')
-  const current = p && (p.changes.find((c) => c.id === changeParam) ?? p.changes.find((c) => c.decision === 'pending') ?? p.changes[0])
+  const ordered = p ? displayOrder(p.changes) : []
+  const current = p && (ordered.find((c) => c.id === changeParam) ?? ordered.find((c) => c.decision === 'pending') ?? ordered[0])
   const reviewable = p?.state === 'awaiting_review'
 
   const select = (cid: string) => {
@@ -85,8 +87,9 @@ export default function ReviewWorkspace() {
     if (!p) return
     const next = await act(() => api.decide(p.id, c.id, d))
     if (!next || d === 'pending') return
-    const i = next.changes.findIndex((x) => x.id === c.id)
-    const upcoming = [...next.changes.slice(i + 1), ...next.changes.slice(0, i)].find((x) => x.decision === 'pending')
+    const order = displayOrder(next.changes)
+    const i = order.findIndex((x) => x.id === c.id)
+    const upcoming = [...order.slice(i + 1), ...order.slice(0, i)].find((x) => x.decision === 'pending')
     if (upcoming) select(upcoming.id)
   }
 
@@ -105,10 +108,6 @@ export default function ReviewWorkspace() {
         ) : (
           <>
             <aside className="sidebar" style={{ width: sidebarWidth }}>
-              <div className="pane-head">
-                <span>{t('inbox.title')}</span>
-                <button className="icon-button" onClick={() => setSidebarHidden(true)} title={t('review.hideSidebar')}>«</button>
-              </div>
               <ProposalList
                 proposals={list.data}
                 error={list.error}
@@ -118,6 +117,7 @@ export default function ReviewWorkspace() {
                 open={p}
                 selectedChange={current?.id}
                 onSelectChange={select}
+                onHide={() => setSidebarHidden(true)}
               />
             </aside>
             <Splitter axis="x" value={sidebarWidth} onChange={setSidebarWidth} min={200} max={640} />
