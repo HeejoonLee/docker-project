@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { ArticleChange, Decision } from '../../api'
 import { DiffView, type DiffMode } from '../../diff'
 import { useI18n } from '../../i18n'
@@ -6,6 +6,9 @@ import { ArticleView } from '../../markdown'
 import { formatTime } from '../../ui'
 
 type Tab = 'preview' | 'diff' | 'source'
+
+// CodeMirror is only needed once someone opens Markdown or Edit, so it loads on demand.
+const CodeEditor = lazy(() => import('../../CodeEditor'))
 
 /** The editor area for one Article change: its header with the decisions, then Preview / Changes / Markdown. */
 export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource }: {
@@ -76,8 +79,10 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
               </button>
             </div>
           </div>
-          <div className="editor-body editing">
-            <textarea className="editor" value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} autoFocus />
+          <div className="editor-body code">
+            <Suspense fallback={<p className="muted">{t('common.loading')}</p>}>
+              <CodeEditor value={draft} onChange={setDraft} />
+            </Suspense>
           </div>
         </>
       ) : earlier ? (
@@ -112,10 +117,14 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
               )}
             </div>
           </div>
-          <div className="editor-body">
+          <div className={`editor-body${tab === 'source' ? ' code' : ''}`}>
             {tab === 'preview' && <ArticleView content={change.content} />}
             {tab === 'diff' && <DiffView key={diffMode} before={change.base_content ?? ''} after={change.content} mode={diffMode} />}
-            {tab === 'source' && <pre className="source-md">{change.content}</pre>}
+            {tab === 'source' && (
+              <Suspense fallback={<p className="muted">{t('common.loading')}</p>}>
+                <CodeEditor value={change.content} />
+              </Suspense>
+            )}
           </div>
         </>
       )}
