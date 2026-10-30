@@ -116,7 +116,7 @@ export default function ReviewWorkspace() {
                 <button className="icon-button" onClick={() => setSidebarHidden(true)} title={t('review.hideSidebar')}>«</button>
               </div>
               <div className="sidebar-sections">
-                <div className="sidebar-list" style={bothSections ? { height: listHeight } : listCollapsed ? undefined : { flex: 1 }}>
+                <div className={`sidebar-list${bothSections ? ' fit' : ''}`} style={bothSections ? { maxHeight: listHeight } : listCollapsed ? undefined : { flex: 1 }}>
                   <ProposalList
                     proposals={list.data}
                     error={list.error}

@@ -46,6 +46,8 @@ export function ChangeTree({ changes, selected, onSelect, collapsed, onCollapse 
   const { t } = useI18n()
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const decided = changes?.filter((c) => c.decision !== 'pending').length ?? 0
+  // Number changes in Proposal order so the count reads the same in the tree and the status bar.
+  const number = new Map(changes?.map((c, i) => [c.id, i + 1]))
 
   const toggleFolder = (path: string) => {
     const next = new Set(closed)
@@ -69,13 +71,18 @@ export function ChangeTree({ changes, selected, onSelect, collapsed, onCollapse 
         <li key={c.id}>
           <button
             className={`tree-row tree-file decision-${c.decision}${c.stale ? ' stale' : ''}${c.id === selected ? ' selected' : ''}`}
-            style={{ paddingLeft: 22 + depth * 12 }}
+            style={{ paddingLeft: 10 + depth * 12 }}
             onClick={() => onSelect(c.id)}
             title={`${c.title}\n${c.path}`}
           >
-            <span className={`tree-kind kind-letter-${c.kind}`} title={t(`proposal.kind.${c.kind}`)}>{KIND_LETTER[c.kind]}</span>
-            <span className="tree-name">{c.title}</span>
-            <span className="tree-file-name">{c.path.split('/').pop()}</span>
+            <span className="tree-index">{number.get(c.id)}</span>
+            <span className="tree-text">
+              <span className="tree-name">{c.title}</span>
+              <span className="tree-sub">
+                <span className={`tree-kind kind-letter-${c.kind}`} title={t(`proposal.kind.${c.kind}`)}>{KIND_LETTER[c.kind]}</span>
+                <span className="tree-file-name">{c.path.split('/').pop()}</span>
+              </span>
+            </span>
             <DecisionMark change={c} />
           </button>
         </li>
@@ -89,9 +96,15 @@ export function ChangeTree({ changes, selected, onSelect, collapsed, onCollapse 
         <button className="side-title" onClick={() => onCollapse(!collapsed)} aria-expanded={!collapsed}>
           <span className="chevron" aria-hidden="true" />
           {t('review.changes')}
-          {changes && changes.length > 0 && <span className="count">{decided} / {changes.length}</span>}
+          {changes && changes.length > 0 && <span className="count count-strong">{changes.length}</span>}
         </button>
       </div>
+      {!collapsed && changes && changes.length > 0 && (
+        <div className="side-progress" title={t('proposal.decidedCount', { done: String(decided), total: String(changes.length) })}>
+          <span>{t('proposal.decidedCount', { done: String(decided), total: String(changes.length) })}</span>
+          <span className="progress-track"><span className="progress-fill" style={{ width: `${(decided / changes.length) * 100}%` }} /></span>
+        </div>
+      )}
       {!collapsed && (
         <div className="side-body">
           {changes === undefined ? (
