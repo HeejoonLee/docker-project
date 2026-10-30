@@ -35,16 +35,12 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
   border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
   transform: rotate(-45deg); transition: transform 0.12s;
 }
-.chevron.open, .side-title .chevron { transform: rotate(45deg); margin-bottom: 3px; }
-.side-section.collapsed .side-title .chevron { transform: rotate(-45deg); margin-bottom: 0; }
+.chevron.open { transform: rotate(45deg); margin-bottom: 3px; }
 
 /* ---------- Sidebar ---------- */
 .sidebar { flex-shrink: 0; min-width: 0; display: flex; flex-direction: column; background: var(--surface-2); }
-.sidebar-sections { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.sidebar-list, .sidebar-tree { min-height: 0; display: flex; flex-direction: column; }
 .side-section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.side-head { display: flex; align-items: center; gap: 2px; flex-shrink: 0; height: 30px; padding: 0 6px 0 4px; border-top: 1px solid var(--border); }
-.sidebar-tree .side-head { border-top: none; }
+.side-head { display: flex; align-items: center; gap: 2px; flex-shrink: 0; height: 30px; padding: 0 6px 0 8px; border-top: 1px solid var(--border); }
 .side-title {
   flex: 1; min-width: 0; justify-content: flex-start; gap: 6px; height: 28px; padding: 0 4px;
   border: none; background: none; box-shadow: none;
@@ -59,10 +55,12 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .side-empty { margin: 8px 14px; color: var(--muted); font-size: 0.84rem; }
 
 .proposal-list { list-style: none; margin: 0; padding: 2px 0 6px; }
-.proposal-row { display: flex; align-items: flex-start; gap: 9px; padding: 6px 12px 6px 14px; color: var(--text); box-shadow: inset 2px 0 transparent; }
+.proposal-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px 6px 8px; color: var(--text); box-shadow: inset 2px 0 transparent; }
 .proposal-row:hover { background: var(--surface-3); color: var(--text); }
 .proposal-row.active, .proposal-row.active:hover { background: var(--accent-soft); box-shadow: inset 2px 0 var(--highlight); }
-.proposal-row-text { min-width: 0; display: flex; flex-direction: column; }
+.proposal-row .chevron { margin-top: 7px; color: var(--muted); }
+.proposal-row .count { margin-top: 2px; flex-shrink: 0; }
+.proposal-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .proposal-row-title, .proposal-row-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proposal-row-title { font-size: 0.86rem; font-weight: 550; }
 .proposal-row-meta { font-size: 0.75rem; color: var(--muted); }
@@ -84,7 +82,6 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .tree-row.selected, .tree-row.selected:hover:not(:disabled) { background: var(--accent-soft); box-shadow: inset 2px 0 var(--highlight); }
 .tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Folders are quiet labels; each Article change is a numbered two-line item so the count is obvious at a glance. */
-.tree-folder { height: 24px; margin-top: 4px; font-size: 0.76rem; color: var(--muted); }
 .tree-file { height: auto; min-height: 48px; align-items: flex-start; gap: 8px; padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 .tree-index {
   flex-shrink: 0; display: inline-grid; place-items: center; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%;
@@ -211,10 +208,15 @@ button.toggle.active { background: var(--accent-soft); border-color: var(--borde
 .segmented.compact { padding: 2px; border-radius: 7px; }
 .segmented.compact button { height: 26px; padding: 0 10px; font-size: 0.8rem; border-radius: 5px; }
 
-/* The Proposals list only takes the room it needs (up to the dragged height), leaving the rest to Article changes. */
-.sidebar-list.fit { flex: 0 1 auto; }
-.sidebar-list.fit .side-section, .sidebar-list.fit .side-body { flex: 1 1 auto; }
 .count-strong { background: var(--accent); color: var(--accent-text); }
-.side-progress { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 0 12px 8px 26px; color: var(--muted); font-size: 0.76rem; white-space: nowrap; }
+.side-progress { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 4px 12px 6px 12px; color: var(--muted); font-size: 0.76rem; white-space: nowrap; }
 .progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .progress-fill { display: block; height: 100%; background: var(--ok); transition: width 0.2s; }
+
+/* The open Proposal's Article changes hang under it like files in a folder, with an indent guide. */
+.proposal-list li.expanded { background: color-mix(in srgb, var(--surface-3) 35%, transparent); }
+.proposal-children { position: relative; margin-left: 22px; padding-bottom: 6px; }
+.proposal-children::before { content: ""; position: absolute; left: -10px; top: 0; bottom: 6px; width: 1px; background: var(--border-strong); }
+.change-rows { list-style: none; margin: 0; padding: 0; }
+.change-rows .tree-file { padding-left: 4px; }
+.side-empty.nested { margin: 4px 12px 8px; }

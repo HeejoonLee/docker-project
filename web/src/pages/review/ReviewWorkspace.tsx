@@ -8,7 +8,6 @@ import { usePoll } from '../../usePoll'
 import { useUser } from '../../user'
 import { AiPanel } from './AiPanel'
 import { ChangeEditor } from './ChangeEditor'
-import { ChangeTree } from './ChangeTree'
 import { Splitter, useStored } from './layout'
 import { ProposalList, type ProposalFilter } from './ProposalList'
 import { SourcePane } from './SourcePane'
@@ -41,9 +40,6 @@ export default function ReviewWorkspace() {
 
   const [sidebarWidth, setSidebarWidth] = useStored('review.sidebarWidth', 280)
   const [sidebarHidden, setSidebarHidden] = useStored('review.sidebarHidden', false)
-  const [listHeight, setListHeight] = useStored('review.listHeight', 300)
-  const [listCollapsed, setListCollapsed] = useStored('review.listCollapsed', false)
-  const [treeCollapsed, setTreeCollapsed] = useStored('review.treeCollapsed', false)
   const [aiWidth, setAiWidth] = useStored('review.aiWidth', 360)
   const [aiOpen, setAiOpen] = useState(() => window.innerWidth >= 1600)
   const [sourceOpen, setSourceOpen] = useStored('review.sourceOpen', false)
@@ -99,8 +95,6 @@ export default function ReviewWorkspace() {
     setFocusRevise((n) => n + 1)
   }
 
-  const bothSections = !listCollapsed && !treeCollapsed
-
   return (
     <div className="workspace">
       <div className="workspace-panes">
@@ -115,29 +109,16 @@ export default function ReviewWorkspace() {
                 <span>{t('inbox.title')}</span>
                 <button className="icon-button" onClick={() => setSidebarHidden(true)} title={t('review.hideSidebar')}>«</button>
               </div>
-              <div className="sidebar-sections">
-                <div className={`sidebar-list${bothSections ? ' fit' : ''}`} style={bothSections ? { maxHeight: listHeight } : listCollapsed ? undefined : { flex: 1 }}>
-                  <ProposalList
-                    proposals={list.data}
-                    error={list.error}
-                    bundles={bundles.data}
-                    filter={filter}
-                    onFilter={setFilter}
-                    collapsed={listCollapsed}
-                    onCollapse={setListCollapsed}
-                  />
-                </div>
-                {bothSections && <Splitter axis="y" value={listHeight} onChange={setListHeight} min={90} max={900} />}
-                <div className="sidebar-tree" style={treeCollapsed ? undefined : { flex: 1 }}>
-                  <ChangeTree
-                    changes={p?.changes}
-                    selected={current?.id}
-                    onSelect={select}
-                    collapsed={treeCollapsed}
-                    onCollapse={setTreeCollapsed}
-                  />
-                </div>
-              </div>
+              <ProposalList
+                proposals={list.data}
+                error={list.error}
+                bundles={bundles.data}
+                filter={filter}
+                onFilter={setFilter}
+                open={p}
+                selectedChange={current?.id}
+                onSelectChange={select}
+              />
             </aside>
             <Splitter axis="x" value={sidebarWidth} onChange={setSidebarWidth} min={200} max={640} />
           </>
