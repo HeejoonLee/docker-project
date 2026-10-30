@@ -50,34 +50,69 @@ function buildRows(before: string, after: string): Row[] {
 }
 
 /** Runs of unchanged rows further than CONTEXT lines from any change, as [start, end) ranges. */
-function hiddenRanges(rows: Row[]): [number, number][] {
-  const near = new Array(rows.length).fill(false)
-  rows.forEach((r, i) => {
-    if (r.kind === 'ctx') return
-    for (let j = Math.max(0, i - CONTEXT); j <= Math.min(rows.length - 1, i + CONTEXT); j++) near[j] = true
+function hiddenRanges(unchanged: boolean[]): [number, number][] {
+  const near = new Array(unchanged.length).fill(false)
+  unchanged.forEach((same, i) => {
+    if (same) return
+    for (let j = Math.max(0, i - CONTEXT); j <= Math.min(unchanged.length - 1, i + CONTEXT); j++) near[j] = true
   })
   const ranges: [number, number][] = []
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 0; i < unchanged.length; i++) {
     if (near[i]) continue
     const start = i
-    while (i < rows.length && !near[i]) i++
+    while (i < unchanged.length && !near[i]) i++
     ranges.push([start, i])
   }
   return ranges
 }
 
-/** A GitHub-style unified diff: changes with a little context, the rest folded behind clickable bars. */
-export function DiffView({ before, after }: { before: string; after: string }) {
+type SplitRow = { left?: Row; right?: Row; same: boolean }
+
+/** Line up removed lines on the left with the added lines that replace them on the right. */
+function toSplit(rows: Row[]): SplitRow[] {
+  const out: SplitRow[] = []
+  let i = 0
+  while (i < rows.length) {
+    if (rows[i].kind === 'ctx') {
+      out.push({ left: rows[i], right: rows[i], same: true })
+      i++
+      continue
+    }
+    const dels: Row[] = []
+    const adds: Row[] = []
+    while (i < rows.length && rows[i].kind === 'del') dels.push(rows[i++])
+    while (i < rows.length && rows[i].kind === 'add') adds.push(rows[i++])
+    for (let j = 0; j < Math.max(dels.length, adds.length); j++) out.push({ left: dels[j], right: adds[j], same: false })
+  }
+  return out
+}
+
+function Segments({ segs }: { segs: Seg[] }) {
+  return <>{segs.map((s, j) => (s.changed ? <mark key={j}>{s.text}</mark> : <Fragment key={j}>{s.text}</Fragment>))}</>
+}
+
+export type DiffMode = 'split' | 'unified'
+
+/**
+ * A diff with a little context around each change and the rest folded behind clickable bars:
+ * side by side like VS Code's diff editor, or unified like GitHub.
+ */
+export function DiffView({ before, after, mode = 'unified' }: { before: string; after: string; mode?: DiffMode }) {
   const { t } = useI18n()
   const rows = useMemo(() => buildRows(before, after), [before, after])
-  const ranges = useMemo(() => hiddenRanges(rows), [rows])
+  const split = useMemo(() => toSplit(rows), [rows])
+  const lines = mode === 'split' ? split : rows
+  const ranges = useMemo(
+    () => hiddenRanges(mode === 'split' ? split.map((r) => r.same) : rows.map((r) => r.kind === 'ctx')),
+    [mode, rows, split],
+  )
   const [shown, setShown] = useState<Set<number>>(new Set())
 
   if (rows.every((r) => r.kind === 'ctx')) return <p className="muted">{t('diff.none')}</p>
 
   const gapAt = new Map(ranges.filter(([s]) => !shown.has(s)).map(([s, e]) => [s, e]))
   const body: ReactNode[] = []
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const end = gapAt.get(i)
     if (end !== undefined) {
       const start = i
@@ -93,20 +128,33 @@ export function DiffView({ before, after }: { before: string; after: string }) {
       i = end - 1
       continue
     }
+    if (mode === 'split') {
+      const { left, right, same } = split[i]
+      body.push(
+        <tr key={i} className={same ? 'ctx' : 'chg'}>
+          <td className={`ln${left && !same ? ' del' : ''}`}>{left?.old ?? ''}</td>
+          <td className={`code${same ? '' : left ? ' del' : ' empty'}`}>{left && <Segments segs={left.segs} />}</td>
+          <td className={`ln${right && !same ? ' add' : ''}`}>{right?.new ?? ''}</td>
+          <td className={`code${same ? '' : right ? ' add' : ' empty'}`}>{right && <Segments segs={right.segs} />}</td>
+        </tr>,
+      )
+      continue
+    }
     const r = rows[i]
     body.push(
       <tr key={i} className={r.kind}>
         <td className="ln">{r.old ?? ''}</td>
         <td className="ln">{r.new ?? ''}</td>
         <td className="sign">{r.kind === 'add' ? '+' : r.kind === 'del' ? '−' : ''}</td>
-        <td className="code">
-          {r.segs.map((s, j) => (s.changed ? <mark key={j}>{s.text}</mark> : <Fragment key={j}>{s.text}</Fragment>))}
-        </td>
+        <td className="code"><Segments segs={r.segs} /></td>
       </tr>,
     )
   }
   return (
-    <table className="diff">
+    <table className={`diff${mode === 'split' ? ' diff-split' : ''}`}>
+      {mode === 'split' && (
+        <colgroup><col className="col-ln" /><col /><col className="col-ln" /><col /></colgroup>
+      )}
       <tbody>{body}</tbody>
     </table>
   )

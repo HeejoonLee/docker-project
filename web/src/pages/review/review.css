@@ -197,3 +197,5 @@ button.toggle.active { background: var(--accent-soft); border-color: var(--borde
 .status-submit:hover:not(:disabled) { background: #bf5f41; color: #fff; }
 .status-submit:disabled { opacity: 1; background: transparent; color: #8d8b86; }
 .source-image { max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius); }
+.segmented.compact { padding: 2px; border-radius: 7px; }
+.segmented.compact button { height: 26px; padding: 0 10px; font-size: 0.8rem; border-radius: 5px; }

@@ -319,5 +319,8 @@
   "review.noSummary": "The agent left no notes.",
   "review.current": "Current version",
   "review.compare": "Compare with current",
-  "review.reviseDecided": "Undo the decision to revise this Article change."
+  "review.reviseDecided": "Undo the decision to revise this Article change.",
+  "review.diffMode": "Diff layout",
+  "review.diff.split": "Side by side",
+  "review.diff.unified": "Unified"
 }

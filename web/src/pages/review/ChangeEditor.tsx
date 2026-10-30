@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ArticleChange, Decision } from '../../api'
-import { DiffView } from '../../diff'
+import { DiffView, type DiffMode } from '../../diff'
 import { useI18n } from '../../i18n'
 import { ArticleView } from '../../markdown'
 import { formatTime } from '../../ui'
@@ -8,9 +8,11 @@ import { formatTime } from '../../ui'
 type Tab = 'preview' | 'diff' | 'source'
 
 /** The editor area for one Article change: its header with the decisions, then Preview / Changes / Markdown. */
-export function ChangeEditor({ change, reviewable, compare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource }: {
+export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource }: {
   change: ArticleChange
   reviewable: boolean
+  diffMode: DiffMode
+  onDiffMode: (mode: DiffMode) => void
   /** Index into change.history to diff against the current version, if any. */
   compare: number | null
   onCloseCompare: () => void
@@ -84,10 +86,13 @@ export function ChangeEditor({ change, reviewable, compare, onCloseCompare, onDe
             <span className="pane-toolbar-title">
               {t('review.comparing', { what: t(`proposal.history.${earlier.replaced_by}`), when: formatTime(earlier.at) })}
             </span>
-            <button onClick={onCloseCompare}>{t('review.closeCompare')}</button>
+            <div className="actions">
+              <DiffModeToggle mode={diffMode} onChange={onDiffMode} />
+              <button onClick={onCloseCompare}>{t('review.closeCompare')}</button>
+            </div>
           </div>
           <div className="editor-body">
-            <DiffView before={earlier.content} after={change.content} />
+            <DiffView key={diffMode} before={earlier.content} after={change.content} mode={diffMode} />
           </div>
         </>
       ) : (
@@ -99,6 +104,7 @@ export function ChangeEditor({ change, reviewable, compare, onCloseCompare, onDe
               ))}
             </nav>
             <div className="actions">
+              {tab === 'diff' && <DiffModeToggle mode={diffMode} onChange={onDiffMode} />}
               {hasSource && (
                 <button className={`toggle${sourceOpen ? ' active' : ''}`} aria-pressed={sourceOpen} onClick={onToggleSource}>
                   {sourceOpen ? t('review.hideSource') : t('review.sourceBeside')}
@@ -108,11 +114,24 @@ export function ChangeEditor({ change, reviewable, compare, onCloseCompare, onDe
           </div>
           <div className="editor-body">
             {tab === 'preview' && <ArticleView content={change.content} />}
-            {tab === 'diff' && <DiffView before={change.base_content ?? ''} after={change.content} />}
+            {tab === 'diff' && <DiffView key={diffMode} before={change.base_content ?? ''} after={change.content} mode={diffMode} />}
             {tab === 'source' && <pre className="source-md">{change.content}</pre>}
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function DiffModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (mode: DiffMode) => void }) {
+  const { t } = useI18n()
+  return (
+    <div className="segmented compact" role="group" aria-label={t('review.diffMode')}>
+      {(['split', 'unified'] as const).map((m) => (
+        <button key={m} className={mode === m ? 'active' : ''} aria-pressed={mode === m} onClick={() => onChange(m)}>
+          {t(`review.diff.${m}`)}
+        </button>
+      ))}
     </div>
   )
 }

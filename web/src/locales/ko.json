@@ -319,5 +319,8 @@
   "review.noSummary": "에이전트 메모가 없습니다.",
   "review.current": "현재 버전",
   "review.compare": "현재 버전과 비교",
-  "review.reviseDecided": "수정을 요청하려면 먼저 결정을 취소하세요."
+  "review.reviseDecided": "수정을 요청하려면 먼저 결정을 취소하세요.",
+  "review.diffMode": "비교 방식",
+  "review.diff.split": "나란히",
+  "review.diff.unified": "한 줄로"
 }

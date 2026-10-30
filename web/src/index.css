@@ -383,3 +383,16 @@ tr.retired td { color: var(--muted); text-decoration: line-through; }
   .actions { flex-wrap: wrap; }
   .decide { justify-content: flex-start; flex-wrap: wrap; }
 }
+
+/* Side-by-side diff: old on the left, new on the right, hatched where a side has no line. */
+table.diff-split { table-layout: fixed; }
+table.diff-split col.col-ln { width: 3.8em; }
+table.diff-split td.ln { min-width: 0; }
+table.diff-split td.code:nth-child(2) { border-right: 1px solid var(--border); }
+table.diff-split td.code.del { background: var(--del-bg); }
+table.diff-split td.code.add { background: var(--add-bg); }
+table.diff-split td.ln.del { background: color-mix(in srgb, var(--del-bg) 70%, var(--del-mark)); }
+table.diff-split td.ln.add { background: color-mix(in srgb, var(--add-bg) 70%, var(--add-mark)); }
+table.diff-split td.code.empty { background: repeating-linear-gradient(-45deg, var(--surface-2) 0 5px, var(--gap-bg) 5px 10px); }
+table.diff-split td.del mark { background: var(--del-mark); color: inherit; border-radius: 3px; }
+table.diff-split td.add mark { background: var(--add-mark); color: inherit; border-radius: 3px; }

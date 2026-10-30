@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useMatch, useSearchParams } from 'react-router-dom'
+import type { DiffMode } from '../../diff'
 import { api, type ArticleChange, type Decision, type Proposal } from '../../api'
 import { useI18n } from '../../i18n'
 import { ErrorBox } from '../../ui'
@@ -47,6 +48,7 @@ export default function ReviewWorkspace() {
   const [aiOpen, setAiOpen] = useState(() => window.innerWidth >= 1600)
   const [sourceOpen, setSourceOpen] = useStored('review.sourceOpen', false)
   const [sourceWidth, setSourceWidth] = useStored('review.sourceWidth', 480)
+  const [diffMode, setDiffMode] = useStored<DiffMode>('review.diffMode', 'split')
   const [compare, setCompare] = useState<{ change: string; index: number } | null>(null)
   // Errors are tagged with their Proposal so they disappear when another one is opened.
   const [failure, setFailure] = useState<{ id: string | undefined; error: unknown }>()
@@ -165,6 +167,8 @@ export default function ReviewWorkspace() {
                       key={current.id}
                       change={current}
                       reviewable={reviewable}
+                      diffMode={diffMode}
+                      onDiffMode={setDiffMode}
                       compare={compare?.change === current.id ? compare.index : null}
                       onCloseCompare={() => setCompare(null)}
                       onDecide={(d) => decide(current, d)}
