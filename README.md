@@ -2,7 +2,7 @@
 
 Stonepedia turns documents into reviewed, git-versioned knowledge for AI agents.
 
-You give it a **Source**: pasted text, a PDF/Word/PowerPoint/Excel file, a photo of a handwritten note, an intranet link, or a typed **Request**. Claude Code drafts a **Proposal**, a set of changes to the **Articles** (OKF v0.2 Markdown) of a **Bundle**. A person reviews each change (Accept, Revise, Edit or Discard), and the accepted changes become one git commit, pushed to GitLab. Scheduled **maintenance** checks links and structure, re-reads linked pages, and can audit a Bundle for duplicates and contradictions. Its output is always another Proposal, never a direct change.
+You give it **Sources**, as many and as mixed as you like: pasted text, PDF/Word/PowerPoint/Excel files, photos of handwritten notes, intranet links. You can add a typed **Request** and have it document code from a read-only Reference directory. Claude Code drafts a **Proposal**, a set of changes to the **Articles** (OKF v0.2 Markdown) of a **Bundle**, and each Article cites the Sources it relied on. A person reviews each change (Accept, Revise, Edit or Discard), and the accepted changes become one git commit, pushed to GitLab. Scheduled **maintenance** checks links and structure, re-reads linked pages, and can audit a Bundle for duplicates and contradictions. Its output is always another Proposal, never a direct change.
 
 Bundle and agent settings are configured in the browser. Host code references and SSH keys need read-only Docker mounts. Under the hood, every step is a [Temporal](https://temporal.io) workflow; the Temporal UI ships alongside for debugging.
 

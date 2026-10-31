@@ -60,14 +60,10 @@ const CHARTS: Chart[] = [
     workflow: 'ProposalWorkflow',
     kinds: ['reviewer', 'ai', 'git', 'system', 'fail', 'ok', 'neutral'],
     build: (t) => `flowchart TD
-  s_text[${q(t('hiw.p.text'))}]:::reviewer
-  s_file[${q(t('hiw.p.file'))}]:::reviewer
-  s_link[${q(t('hiw.p.link'))}]:::reviewer
-  s_request[${q(t('hiw.p.request'))}]:::reviewer
-  s_code[${q(t('hiw.p.code'))}]:::reviewer
+  s_new[${q(t('hiw.p.new'))}]:::reviewer
   s_audit[${q(t('hiw.p.audit'))}]:::reviewer
   s_refresh[${q(t('hiw.p.refresh'))}]:::system
-  s_text & s_file & s_link & s_request & s_code & s_audit & s_refresh --> read[${q(t('hiw.p.read'))}]:::system
+  s_new & s_audit & s_refresh --> read[${q(t('hiw.p.read'))}]:::system
   read -.->|${q(t('hiw.p.unreadable'))}| failed([${q(t('state.failed'))}]):::fail
   read --> propose[${q(t('hiw.p.propose'))}]:::ai
   propose -.->|${q(t('hiw.p.nothing'))}| failed
