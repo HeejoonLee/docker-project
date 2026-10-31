@@ -46,7 +46,11 @@ async def until(check, tries=150):
     raise AssertionError("condition not reached")
 
 
-async def propose(http, slug, **data):
+async def propose(http, slug, kind, text, **data):
+    if kind == "request":
+        data["request"] = text
+    else:
+        data["sources"] = json.dumps([{"kind": kind, "text": text}])
     r = await http.post("/api/proposals", data={"bundle": slug, "submitted_by": "kim", **data})
     assert r.status_code == 201, r.text
     pid = r.json()["id"]
@@ -131,7 +135,7 @@ async def test_import_knowledge_subfolder(http, settings, tmp_path, uid):
     meta, _ = frontmatter.split(change["content"])
     assert meta["cornerstone"]["knowledge_id"] == "BK-04" and meta["cornerstone"]["wbs_steps"]
     ids = [s.get("id") for s in meta["sources"]]
-    assert "wbs" in ids and view["id"] in ids  # original sources kept, the Request added
+    assert "wbs" in ids and f"{view['id']}-1" in ids  # original sources kept, the Request added
 
     new = await propose(http, slug, kind="text", title="Reboot timing", text="Reboot takes 40 s.")
     await accept_all(http, view)
@@ -143,7 +147,7 @@ async def test_import_knowledge_subfolder(http, settings, tmp_path, uid):
 
     repo = settings.bundles_dir / slug
     assert (repo / "knowledge/bl-kd/notes/reboot-timing.md").exists()
-    assert (repo / "knowledge/bl-kd/sources" / new["id"] / "text.md").exists()
+    assert (repo / "knowledge/bl-kd/sources" / f"{new['id']}-1" / "text.md").exists()
     assert not (repo / "notes").exists()
     log = git.git(remote, "log", "--format=%an|%s", "-4", "HEAD")
     assert "lee|Reboot timing" in log and "Stonepedia|Set up Stonepedia" in log

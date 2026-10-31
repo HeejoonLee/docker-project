@@ -58,7 +58,7 @@ async def test_code_proposal_refreshes_stale_citation(http, settings, uid):
     created = await http.post("/api/bundles", json={"slug": slug, "name": "Code"})
     assert created.status_code == 201, created.text
     unavailable = await http.post("/api/proposals", data={
-        "bundle": slug, "kind": "code", "text": "Document the boot flow",
+        "bundle": slug, "use_reference": "true", "request": "Document the boot flow",
     })
     assert unavailable.status_code == 422
     detail = (await http.get(f"/api/bundles/{slug}")).json()
@@ -72,7 +72,8 @@ async def test_code_proposal_refreshes_stale_citation(http, settings, uid):
     assert updated.json()["reference_excludes"] == [".env*", "dist"]
 
     proposal = await http.post("/api/proposals", data={
-        "bundle": slug, "kind": "code", "text": "Document the boot flow", "title": "Boot flow", "submitted_by": "kim",
+        "bundle": slug, "use_reference": "true", "request": "Document the boot flow", "title": "Boot flow",
+        "submitted_by": "kim",
     })
     assert proposal.status_code == 201, proposal.text
     pid = proposal.json()["id"]

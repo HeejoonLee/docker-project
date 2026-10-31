@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from stonepedia import sources
-from stonepedia.models import SourceInput
+from stonepedia.models import ProposalInput, SourceInput
 
 def build_pdf(pages: list[str]) -> bytes:
     """A minimal valid PDF with one line of Helvetica text per page."""
@@ -169,3 +169,12 @@ def test_link_errors(tmp_path, web_server):
         sources.prepare(SourceInput(kind="link", url=f"{web_server}/missing"), None, tmp_path / "e", "kim", "", 2**20, False)
     with pytest.raises(sources.SourceError, match="larger than"):
         sources.prepare(SourceInput(kind="link", url=f"{web_server}/spec.pdf"), None, tmp_path / "f", "kim", "", 100, False)
+
+
+def test_single_source_input_from_before_0_4_is_read_into_the_new_fields():
+    old = ProposalInput.model_validate({"proposal_id": "p", "bundle": "b", "title": "t", "submitted_by": "kim",
+                                        "source": {"kind": "code", "text": "Document boot"}})
+    assert old.request == "Document boot" and old.use_reference and old.sources == []
+    old = ProposalInput.model_validate({"proposal_id": "p", "bundle": "b", "title": "t", "submitted_by": "kim",
+                                        "source": {"kind": "link", "url": "http://x"}})
+    assert old.sources[0].url == "http://x" and not old.request

@@ -33,6 +33,7 @@ from stonepedia.models import (
     Finding,
     CommitRequest,
     CommitResult,
+    PreparedSources,
     ProposalInput,
     SourceInfo,
     SourceInput,
@@ -176,8 +177,49 @@ class Activities:
     # ---------- Sources ----------
 
     @activity.defn
+    def prepare_sources(self, inp: ProposalInput) -> PreparedSources:
+        """Extract each submitted Source, and the Request, into <data>/sources/<proposal id>-<n>/.
+
+        If any Source cannot be read, none is kept and the error names that Source.
+        """
+        cfg = appconfig.load(self.settings.config_dir)
+        items = list(inp.sources)
+        if inp.request.strip():
+            items.append(SourceInput(kind="audit" if inp.audit else "request", text=inp.request,
+                                     title=f"Request by {inp.submitted_by}" if not inp.audit else "AI audit"))
+        prepared: list[SourceInfo] = []
+        for n, item in enumerate(items, 1):
+            dest = self.settings.sources_dir / f"{inp.proposal_id}-{n}"
+            meta = dest / "meta.yaml"
+            if meta.exists():  # activity retry after success
+                prepared.append(_with_preview(SourceInfo.model_validate(yaml.safe_load(meta.read_text())), dest))
+                continue
+            shutil.rmtree(dest, ignore_errors=True)
+            upload = None
+            if item.kind == "file":
+                staged = self.settings.uploads_dir / inp.proposal_id / str(n)
+                files = sorted(staged.iterdir()) if staged.exists() else []
+                upload = files[0] if files else None
+            try:
+                info = sources.prepare(item, upload, dest, submitted_by=inp.submitted_by, title="",
+                                       max_bytes=cfg.max_source_mb * 2**20, verify_tls=cfg.verify_link_certificates)
+            except Exception as err:  # the message names the Source; the workflow reports the deepest cause
+                shutil.rmtree(dest, ignore_errors=True)
+                permanent = isinstance(err, sources.SourceError)
+                if permanent:
+                    for other in range(1, len(items) + 1):
+                        shutil.rmtree(self.settings.sources_dir / f"{inp.proposal_id}-{other}", ignore_errors=True)
+                label = item.title or item.filename or item.url or item.text.strip()[:40]
+                raise ApplicationError(f"Source {n} ({label}): {err}", non_retryable=permanent) from None
+            prepared.append(_with_preview(info, dest))
+        shutil.rmtree(self.settings.uploads_dir / inp.proposal_id, ignore_errors=True)
+        has_request = bool(inp.request.strip())
+        return PreparedSources(sources=prepared[:-1] if has_request else prepared,
+                               request=prepared[-1] if has_request else None)
+
+    @activity.defn
     def prepare_source(self, inp: ProposalInput) -> SourceInfo:
-        """Extract the submitted Source into <data>/sources/<proposal id>/."""
+        """Before 0.4: extract a Proposal's single Source into <data>/sources/<proposal id>/."""
         dest = self.settings.sources_dir / inp.proposal_id
         meta = dest / "meta.yaml"
         if meta.exists():  # activity retry after success
@@ -185,6 +227,7 @@ class Activities:
         shutil.rmtree(dest, ignore_errors=True)
         cfg = appconfig.load(self.settings.config_dir)
         upload = None
+        assert inp.source is not None
         if inp.source.kind == "file":
             staged = self.settings.uploads_dir / inp.proposal_id
             files = sorted(staged.iterdir()) if staged.exists() else []
@@ -226,8 +269,7 @@ class Activities:
         ws_root = workspace / job.root
         await asyncio.to_thread(_fresh_worktree, repo, workspace)
         try:
-            staged = self.settings.sources_dir / job.source.id
-            stale_targets = await asyncio.to_thread(_prepare_workspace, ws_root, job, staged)
+            stale_targets = await asyncio.to_thread(_prepare_workspace, ws_root, job, self.settings.sources_dir)
             if self.settings.agent == "fake":
                 summary, cost, agent_name = fake.run(ws_root, job), None, "fake-agent"
             else:
@@ -315,10 +357,11 @@ class Activities:
         if code_stale:
             return CommitResult(stale_code_paths=code_stale)
         now = _now()
-        if req.source_id:
-            staged = self.settings.sources_dir / req.source_id
-            if staged.exists() and not (root / "sources" / req.source_id).exists():
-                shutil.copytree(staged, root / "sources" / req.source_id)
+        source_ids = req.source_ids or ([req.source_id] if req.source_id else [])
+        for sid in source_ids:
+            staged = self.settings.sources_dir / sid
+            if staged.exists() and not (root / "sources" / sid).exists():
+                shutil.copytree(staged, root / "sources" / sid)
         for change in req.changes:
             target = root / change.path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -333,8 +376,11 @@ class Activities:
         bundle.regenerate(root, settings)
 
         message = f"{req.title}\n\nProposal: {req.proposal_id}\nReviewed-by: {req.reviewer}\n"
-        if req.source_id:
-            message += f"Source: sources/{req.source_id}/\n"
+        for sid in source_ids:
+            message += f"Source: sources/{sid}/\n"
+        if req.request_text.strip():
+            quoted = "\n".join(f"> {line}".rstrip() for line in req.request_text.strip().splitlines())
+            message += f"\nRequest by {req.request_by}:\n{quoted}\n"
         for change in req.changes:
             extra = f" (edited by {change.edited_by})" if change.edited_by else ""
             new_id = f" [{ids[change.path]}]" if change.path in ids else ""
@@ -419,6 +465,7 @@ class Activities:
             self.set_remote,
             self.sync_bundle,
             self.push_bundle,
+            self.prepare_sources,
             self.prepare_source,
             self.run_agent,
             self.check_agent,
@@ -444,16 +491,16 @@ def _remove_worktree(repo: Path, workspace: Path) -> None:
     shutil.rmtree(workspace, ignore_errors=True)
 
 
-def _prepare_workspace(ws_root: Path, job: AgentJob, staged_source: Path) -> list[str]:
-    """Place the Source and this Proposal's current changes into the workspace.
+def _prepare_workspace(ws_root: Path, job: AgentJob, sources_dir: Path) -> list[str]:
+    """Place the Sources, the Request and this Proposal's current changes into the workspace.
 
     A carried change whose Article moved on since it was proposed is not written over the newer
     version; it goes to the task folder instead. Returns those stale paths among the targets.
     """
-    if staged_source.exists():
-        dest = ws_root / "sources" / job.source.id
-        if not dest.exists():
-            shutil.copytree(staged_source, dest)
+    for info in _job_items(job):
+        staged, dest = sources_dir / info.id, ws_root / "sources" / info.id
+        if staged.exists() and not dest.exists():
+            shutil.copytree(staged, dest)
     task = ws_root / TASK_DIR
     task.mkdir(parents=True, exist_ok=True)
     stale_targets = []
@@ -474,6 +521,21 @@ def _prepare_workspace(ws_root: Path, job: AgentJob, staged_source: Path) -> lis
     return stale_targets
 
 
+def _job_items(job: AgentJob) -> list[SourceInfo]:
+    return job.sources + ([job.request] if job.request else [])
+
+
+def citable(job: AgentJob) -> dict[str, SourceInfo]:
+    """The Sources (and Request) an Article of this job may cite, by id. Audit instructions are not citable."""
+    return {i.id: i for i in _job_items(job) if i.kind != "audit"}
+
+
+def cited_ids(content: str, ids) -> list[str]:
+    """Ids among `ids` that an Article cites in its `sources` frontmatter."""
+    meta, _ = frontmatter.split(content)
+    return [str(s["id"]) for s in meta.get("sources") or [] if isinstance(s, dict) and str(s.get("id")) in ids]
+
+
 def source_entry(info: SourceInfo, article_path: str) -> dict:
     """The `sources` frontmatter entry citing a Source from an Article."""
     rel = lambda name: os.path.relpath(f"sources/{info.id}/{name}", os.path.dirname(article_path) or ".")  # noqa: E731
@@ -483,7 +545,7 @@ def source_entry(info: SourceInfo, article_path: str) -> dict:
         entry["archived"] = rel("text.md")
     else:
         entry["resource"] = rel(info.original)
-    if info.kind in ("text", "request"):
+    if info.kind in ("text", "request", "code"):
         entry["author"] = f"human:{info.submitted_by}"
     return entry
 
@@ -502,6 +564,8 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str, spec: Bund
     prefix = "" if job.root == "." else job.root + "/"
     changes = []
     commit = references.git_commit(reference) if reference else ""
+    allowed = citable(job)
+    audit = job.request is not None and job.request.kind == "audit"
 
     def rel_paths(paths: list[str]) -> list[str]:
         return [p[len(prefix):] for p in paths if p.startswith(prefix) and bundle.is_article(p[len(prefix):])]
@@ -514,8 +578,8 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str, spec: Bund
         if carried.get(path) == written:
             content = written  # carried over and left untouched by the agent
         else:
-            cite = None if job.source.kind == "audit" else source_entry(job.source, path)
             written_meta, _ = frontmatter.split(written)
+            ids = _source_refs(path, written_meta.get("source_refs"), allowed)
             paths = written_meta.get("code_refs")
             code_sources = None
             if paths is not None:
@@ -525,7 +589,15 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str, spec: Bund
                     code_sources = [references.citation(reference, spec, p, commit) for p in dict.fromkeys(paths)]
                 except ValueError as err:
                     raise AgentError(str(err)) from err
-            content = frontmatter.finalize(written, base_content, generated, cite, code_sources)
+            if ids is None:  # not declared: keep what this Proposal's earlier version cited
+                ids = cited_ids(carried.get(path, ""), allowed)
+            if not ids and not code_sources and len(allowed) == 1:
+                ids = list(allowed)  # a single Source is unambiguous
+            if not ids and not code_sources and not audit:
+                raise AgentError(f"{path} does not cite any Source of this Proposal: list the Sources it is based "
+                                 "on in source_refs (or the code files in code_refs).")
+            entries = [source_entry(allowed[i], path) for i in ids]
+            content = frontmatter.finalize(written, base_content, generated, entries, code_sources)
         meta, _ = frontmatter.split(content)
         changes.append(ArticleChange(
             id=change_id(path),
@@ -550,9 +622,21 @@ def _collect_changes(workspace: Path, job: AgentJob, agent_name: str, spec: Bund
             content=frontmatter.update(base_content, status="retired"),
             title=str(meta.get("title", path)),
         ))
-    if job.source.kind == "code" and not any(references.citations_from_content(c.content) for c in changes):
+    if job.use_reference and not any(references.citations_from_content(c.content) for c in changes):
         raise AgentError("A code-only Proposal needs at least one Article citing a code file in code_refs.")
     return changes
+
+
+def _source_refs(path: str, declared, allowed: dict[str, SourceInfo]) -> list[str] | None:
+    """The validated `source_refs` an agent wrote into an Article, or None if it wrote none."""
+    if declared is None:
+        return None
+    if not isinstance(declared, list) or any(not isinstance(i, str) for i in declared):
+        raise AgentError(f"{path}: source_refs must be a list of Source ids.")
+    unknown = [i for i in declared if i not in allowed]
+    if unknown:
+        raise AgentError(f"{path} cites unknown Sources {', '.join(unknown)}; use only: {', '.join(allowed) or '(none)'}.")
+    return list(dict.fromkeys(declared))
 
 
 def _email_local(name: str) -> str:

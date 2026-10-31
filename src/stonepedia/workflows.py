@@ -9,7 +9,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from stonepedia import config, frontmatter, references, search
-    from stonepedia.activities import Activities
+    from stonepedia.activities import Activities, cited_ids
     from stonepedia.models import (
         AgentCheck,
         AgentJob,
@@ -27,6 +27,7 @@ with workflow.unsafe.imports_passed_through():
         Finding,
         MaintenanceInput,
         MaintenanceReport,
+        PreparedSources,
         ProposalInput,
         ProposalState,
         ProposalView,
@@ -215,9 +216,10 @@ class ProposalWorkflow:
         self._view = ProposalView(
             id=inp.proposal_id,
             bundle=inp.bundle,
-            title=inp.title or inp.source.url,
+            title=inp.title,
             submitted_by=inp.submitted_by,
-            source_kind=inp.source.kind,
+            request_text=inp.request,
+            use_reference=inp.use_reference,
             targets=inp.targets,
             note=inp.note,
             origin=inp.origin,
@@ -229,15 +231,15 @@ class ProposalWorkflow:
     @workflow.run
     async def run(self, inp: ProposalInput) -> ProposalView:
         try:
-            self._view.source = await workflow.execute_activity_method(
-                Activities.prepare_source, inp, start_to_close_timeout=timedelta(minutes=10), retry_policy=_RETRY
-            )
+            prepared = await self._prepare(inp)
         except ActivityError as err:
-            self._view.error = f"Could not read the Source: {_cause(err)}"
+            self._view.error = f"Could not read a Source: {_cause(err)}"
             self._set_state("failed")
             return self._view
-        if not inp.title:  # untitled link: use the page title
-            self._view.title = self._view.source.title
+        self._view.sources, self._view.request = prepared.sources, prepared.request
+        if not self._view.title:  # e.g. only links: use the first page title
+            first = (prepared.sources or [prepared.request])[0]
+            self._view.title = first.title if first else inp.proposal_id
             workflow.upsert_memo({"title": self._view.title})
         await self._run_agent(self._job("propose"))
         if not self._view.changes:
@@ -256,6 +258,19 @@ class ProposalWorkflow:
         await workflow.wait_condition(workflow.all_handlers_finished)
         return self._view
 
+    async def _prepare(self, inp: ProposalInput) -> PreparedSources:
+        if workflow.patched("many-sources"):
+            return await workflow.execute_activity_method(
+                Activities.prepare_sources, inp, start_to_close_timeout=timedelta(minutes=30), retry_policy=_RETRY
+            )
+        # Started before a Proposal could carry several Sources: one folder named after the Proposal.
+        info = await workflow.execute_activity_method(
+            Activities.prepare_source, inp, start_to_close_timeout=timedelta(minutes=10), retry_policy=_RETRY
+        )
+        if info.kind in ("request", "code", "audit"):
+            return PreparedSources(request=info)
+        return PreparedSources(sources=[info])
+
     # ---------- Agent runs ----------
 
     def _job(self, mode: AgentMode, feedback: str = "", targets: list[str] | None = None) -> AgentJob:
@@ -264,7 +279,9 @@ class ProposalWorkflow:
             bundle=self._inp.bundle,
             mode=mode,
             title=self._view.title,
-            source=self._view.source,
+            sources=self._view.sources,
+            request=self._view.request,
+            use_reference=self._inp.use_reference,
             submitted_by=self._inp.submitted_by,
             request_targets=self._inp.targets,
             note=self._inp.note,
@@ -383,7 +400,9 @@ class ProposalWorkflow:
                         title=self._view.title,
                         reviewer=reviewer,
                         changes=accepted,
-                        source_id=self._view.source.id if self._view.source and self._view.source.kind != "audit" else None,
+                        source_ids=self._cited_sources(accepted),
+                        request_text=self._view.request_text,
+                        request_by=self._inp.submitted_by,
                     ),
                 ],
                 start_to_close_timeout=_SHORT,
@@ -417,6 +436,12 @@ class ProposalWorkflow:
         self._view.error = None
         self._set_state("done")
         return True
+
+    def _cited_sources(self, changes: list[ArticleChange]) -> list[str]:
+        items = self._view.sources + ([self._view.request] if self._view.request else [])
+        ids = [i.id for i in items if i.kind != "audit"]
+        cited = {sid for c in changes for sid in cited_ids(c.content, ids)}
+        return [i for i in ids if i in cited]
 
     # ---------- Review actions ----------
 
@@ -631,7 +656,7 @@ class MaintenanceWorkflow:
             proposal_id=pid,
             bundle=inp.bundle,
             title=f"Updated: {link.title}",
-            source=SourceInput(kind="link", url=link.url),
+            sources=[SourceInput(kind="link", url=link.url)],
             submitted_by="Stonepedia maintenance",
             note=(
                 f"This page changed since it was captured as Source `sources/{link.source_id}/` "

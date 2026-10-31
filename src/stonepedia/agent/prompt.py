@@ -71,56 +71,67 @@ def _rules() -> str:
 
 
 def _material(job: AgentJob) -> str:
-    src = job.source
-    folder = f"sources/{src.id}"
-    if src.kind == "text":
-        lines = [f'The material is in `{folder}/text.md` ("{job.title}", submitted by {job.submitted_by}).']
-    elif src.kind == "request":
+    req = job.request
+    if req is not None and req.kind == "audit":
         lines = [
-            f"This is a Request by {src.submitted_by} (`{folder}/request.md`): a direct statement from a person,",
-            "not a document. Record it as that person's statement, not as verified fact.",
+            f"This is an audit of the existing Articles requested by {req.submitted_by}; the instructions are in "
+            f"`sources/{req.id}/request.md`. It brings no new material: work only from what the Bundle already contains.",
+        ]
+        if job.note:
+            lines.append(f"Context: {job.note}")
+        return "\n".join(lines)
+
+    lines = []
+    if req is not None:
+        lines += [
+            f"The Request `{req.id}` by {req.submitted_by} is in `sources/{req.id}/request.md`. Follow it. It is also a",
+            "direct statement from a person, not a document: where an Article relies on it as a statement, record it as",
+            "that person's statement, not as verified fact.",
         ]
         if job.request_targets:
             lines.append("It is aimed at: " + ", ".join(f"`{p}`" for p in job.request_targets) + ".")
-    elif src.kind == "code":
-        lines = [
+        lines.append("")
+    if job.sources:
+        lines.append(f"Sources ({len(job.sources)}). Use all of them:")
+        lines += [_describe(src) for src in job.sources]
+        lines.append("")
+    if job.use_reference and job.reference_dir:
+        lines += [
             f"The reviewer asks you to document code in the Bundle's Reference directory: {job.reference_dir}.",
-            f"Read the full focus instruction in `{folder}/request.md`, then read the relevant code files directly.",
-            "The code is not copied into this Bundle.",
+            "Read the relevant code files directly. The code is not copied into this Bundle.",
+            "",
         ]
-    elif src.kind == "audit":
-        lines = [
-            f"This is an audit of the existing Articles requested by {src.submitted_by}; the instructions are in "
-            f"`{folder}/request.md`. It brings no new material: work only from what the Bundle already contains.",
-        ]
+    if job.note:
+        lines += [f"Context: {job.note}", ""]
+    ids = [i.id for i in job.sources] + ([req.id] if req is not None else [])
+    lines += [
+        "Citing: in every Article you create or change, add a top-level `source_refs` list with the ids of the "
+        f"Sources it is based on (from: {', '.join(f'`{i}`' for i in ids)}); include the Request only if the "
+        "Article relies on it as a statement. The system turns `source_refs` into the `sources` field. "
+        "Refer to Sources in the body where useful (e.g. by page).",
+    ]
+    if job.sources:
+        lines.append("In your summary, name any Source you did not use and say why.")
+    return "\n".join(lines)
+
+
+def _describe(src) -> str:
+    folder = f"sources/{src.id}"
+    name = f'"{src.title}"' if src.title else ""
+    if src.kind == "text":
+        line = f"- `{src.id}`: text submitted by {src.submitted_by}, in `{folder}/text.md`."
     elif src.kind == "link":
-        lines = [
-            f"The material was fetched from {src.url}. `{folder}/text.md` is its text; "
-            f"`{folder}/{src.original}` is the original.",
-        ]
+        line = f"- `{src.id}`: fetched from {src.url}. `{folder}/text.md` is its text; `{folder}/{src.original}` is the original."
     elif src.media == "image":
-        lines = [
-            f"The material is an image (for example a photo of a handwritten note): `{folder}/{src.original}`"
-            f' ("{src.filename}"). Read the image directly. In your summary, mention anything you could not read.',
-        ]
+        line = (f'- `{src.id}`: an image (for example a photo of a handwritten note), `{folder}/{src.original}` ("{src.filename}"). '
+                "Read the image directly; in your summary, mention anything you could not read.")
     else:
         unit = "pages" if src.media == "pdf" else "slides" if src.media == "pptx" else ""
         count = f", {src.pages} {unit}" if src.pages and unit else ""
-        lines = [
-            f'The material is the {src.media} file "{src.filename}"{count}. `{folder}/text.md` holds its extracted '
-            f"text with section markers; `{folder}/{src.original}` is the original. Use Grep on text.md to find "
-            "relevant parts of large documents. If the text is missing or garbled (e.g. a scan), read the original.",
-        ]
-    for warning in src.warnings:
-        lines.append(f"Note: {warning}")
-    if job.note:
-        lines.append(f"Context: {job.note}")
-    if src.kind != "audit":
-        lines.append(
-            "The system adds this Source to the `sources` field of every Article you create or change; "
-            "refer to it in the body where useful (e.g. by page)."
-        )
-    return "\n".join(lines)
+        line = (f'- `{src.id}`: the {src.media} file "{src.filename}"{count}. `{folder}/text.md` holds its extracted text '
+                f"with section markers; `{folder}/{src.original}` is the original. Use Grep on text.md to find relevant "
+                "parts of large documents. If the text is missing or garbled (e.g. a scan), read the original.")
+    return line + "".join(f" Note: {w}" for w in src.warnings)
 
 
 def _reference(job: AgentJob) -> str:
@@ -133,7 +144,7 @@ def _reference(job: AgentJob) -> str:
         f"Avoid these paths in discovery unless the reviewer specifically needs them: {excluded}.",
         "For every Article based on code, add a top-level `code_refs` list of the relative paths of the exact files used.",
         "The system validates those paths and records file hashes and the Git commit in `sources` frontmatter.",
-        "Never cite a directory or an invented file path. A code-only Proposal needs at least one code reference.",
+        "Never cite a directory or an invented file path. When the reviewer asks you to document code, cite at least one code file.",
     ])
 
 

@@ -3,14 +3,16 @@
 import re
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from stonepedia.bundle import BundleSettings, Template
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 ChangeKind = Literal["create", "update", "retire"]
+# "code" only appears on Proposals started before a Proposal could carry several Sources.
 SourceKind = Literal["text", "file", "link", "request", "code", "audit"]
+MAX_SOURCES = 20
 Decision = Literal["pending", "accepted", "discarded"]
 ProposalState = Literal["generating", "awaiting_review", "committing", "done", "discarded", "failed"]
 
@@ -57,12 +59,13 @@ class BundleSpec(BaseModel):
 
 
 class SourceInput(BaseModel):
-    """What the submitter gave us. Files are staged under <data>/uploads/<proposal id>/ by the web app."""
+    """One item the submitter gave us. Files are staged under <data>/uploads/<proposal id>/<n>/ by the web app."""
 
     kind: SourceKind
     text: str = ""  # text, request and audit
     url: str = ""  # link
     filename: str = ""  # file: the uploaded file's original name
+    title: str = ""  # optional, chosen by the submitter
 
 
 class SourceInfo(BaseModel):
@@ -157,7 +160,9 @@ class AgentJob(BaseModel):
     reference_excludes: list[str] = []
     mode: AgentMode
     title: str
-    source: SourceInfo
+    sources: list[SourceInfo] = []
+    request: SourceInfo | None = None  # the Request (kind request), or the audit instructions (kind audit)
+    use_reference: bool = False  # the Reference directory's code is material to document
     submitted_by: str
     request_targets: list[str] = []  # Articles a Request is aimed at
     note: str = ""
@@ -189,11 +194,34 @@ class ProposalInput(BaseModel):
     proposal_id: str
     bundle: str
     title: str
-    source: SourceInput
+    sources: list[SourceInput] = []  # texts, files and links, in submission order
+    request: str = ""  # the Request text, or the audit instructions
+    audit: bool = False
+    use_reference: bool = False  # document code from the Bundle's Reference directory
     submitted_by: str
-    targets: list[str] = []  # Requests: Articles the Request is aimed at
+    targets: list[str] = []  # Articles the Request is aimed at
     note: str = ""  # extra context for the agent (e.g. why maintenance opened this Proposal)
     origin: Literal["person", "maintenance"] = "person"
+    # Proposals started before 0.4 carry exactly one Source here; it is read into the fields above.
+    source: SourceInput | None = None
+
+    @model_validator(mode="after")
+    def _from_single_source(self) -> "ProposalInput":
+        src = self.source
+        if src is None or self.sources or self.request:
+            return self
+        if src.kind in ("text", "file", "link"):
+            self.sources = [src]
+        else:
+            self.request = src.text
+            self.audit = src.kind == "audit"
+            self.use_reference = src.kind == "code"
+        return self
+
+
+class PreparedSources(BaseModel):
+    sources: list[SourceInfo] = []
+    request: SourceInfo | None = None
 
 
 class ProposalView(BaseModel):
@@ -201,8 +229,10 @@ class ProposalView(BaseModel):
     bundle: str
     title: str
     submitted_by: str
-    source_kind: SourceKind
-    source: SourceInfo | None = None
+    sources: list[SourceInfo] = []
+    request: SourceInfo | None = None
+    request_text: str = ""
+    use_reference: bool = False
     targets: list[str] = []
     note: str = ""
     origin: Literal["person", "maintenance"] = "person"
@@ -222,7 +252,10 @@ class CommitRequest(BaseModel):
     proposal_id: str
     title: str
     reviewer: str
-    source_id: str | None = None
+    source_ids: list[str] = []  # Sources (and the Request) cited by the accepted changes
+    request_text: str = ""
+    request_by: str = ""
+    source_id: str | None = None  # before 0.4
     changes: list[ArticleChange]  # accepted changes only
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import http.server as httpserver
 import threading
 
@@ -88,7 +89,7 @@ async def test_link_refresh_opens_one_proposal_per_change(http, settings, site, 
     url, page = site
     slug = f"m{uid}"
     await http.post("/api/bundles", json={"slug": slug, "name": "Links"})
-    r = await http.post("/api/proposals", data={"bundle": slug, "kind": "link", "url": f"{url}/spec.html"})
+    r = await http.post("/api/proposals", data={"bundle": slug, "sources": json.dumps([{"kind": "link", "url": f"{url}/spec.html"}])})
     view = await _wait(http, r.json()["id"])
     assert view["title"] == "Spec"  # untitled link takes the page title
     for c in view["changes"]:
@@ -141,12 +142,12 @@ async def test_audit_proposal_does_not_cite_itself(http, settings, uid):
     r = await http.post(f"/api/bundles/{slug}/audit", json={"requested_by": "kim", "focus": "FFU docs"})
     assert r.status_code == 201 and r.json()["title"] == "AI audit: FFU docs"
     view = await _wait(http, r.json()["id"])
-    assert view["source"]["kind"] == "audit"
+    assert view["request"]["kind"] == "audit" and view["sources"] == []
     [c] = view["changes"]
     assert "sources:" not in c["content"]
     await http.post(f"/api/proposals/{view['id']}/changes/{c['id']}/decision", json={"decision": "accepted"})
     await http.post(f"/api/proposals/{view['id']}/submit", json={"reviewer": "lee"})
     await _wait(http, view["id"], ("done",))
     assert not (settings.bundles_dir / slug / "sources").exists()
-    meta = yaml.safe_load((settings.sources_dir / view["id"] / "meta.yaml").read_text())
+    meta = yaml.safe_load((settings.sources_dir / view["request"]["id"] / "meta.yaml").read_text())
     assert meta["kind"] == "audit"

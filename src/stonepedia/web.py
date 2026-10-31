@@ -4,7 +4,9 @@ The web app never writes to a Bundle. It starts and talks to workflows through t
 Temporal client, and reads Bundle repos only to display them.
 """
 
+import json
 import secrets
+import shutil
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -39,6 +41,7 @@ from stonepedia.models import (
     PushState,
     SourceInput,
 )
+from stonepedia.models import MAX_SOURCES
 from stonepedia.sources import SUPPORTED_EXTS
 from stonepedia.temporal import connect
 from stonepedia.workflows import AgentCheckWorkflow, BundleWorkflow, MaintenanceWorkflow, ProposalWorkflow
@@ -382,50 +385,92 @@ async def list_proposals(request: Request, bundle: str | None = None, state: str
     return sorted(out, key=lambda p: p.created_at or "", reverse=True)
 
 
+class SourceItem(BaseModel):
+    """One Source as the New Proposal form sends it. File items take the next upload from `files`."""
+
+    kind: Literal["text", "file", "link"]
+    text: str = ""
+    url: str = ""
+    title: str = ""
+
+
 @app.post("/api/proposals", status_code=201)
 async def create_proposal(
     request: Request,
     bundle: str = Form(...),
-    kind: Literal["text", "file", "link", "request", "code"] = Form(...),
     submitted_by: str = Form(""),
     title: str = Form(""),
-    text: str = Form(""),
-    url: str = Form(""),
-    targets: str = Form(""),  # Requests: newline-separated Article paths
-    file: UploadFile | None = File(None),
+    sources: str = Form("[]"),  # JSON list of SourceItem, in submission order
+    files: list[UploadFile] = File([]),
+    request_text: str = Form("", alias="request"),
+    targets: str = Form(""),  # newline-separated Article paths the Request is aimed at
+    use_reference: bool = Form(False),
 ) -> ProposalSummary:
     settings = _settings(request)
     if not (settings.bundles_dir / bundle / ".git").exists():
         raise HTTPException(404, "No such Bundle.")
-    title = title.strip()
-    if kind in ("text", "request", "code") and not text.strip():
-        raise HTTPException(422, "Text is required.")
-    if kind == "code" and not (await _bundle_status(request, bundle)).spec.reference_dir:
+    try:
+        items = [SourceItem.model_validate(i) for i in json.loads(sources)]
+    except (ValueError, TypeError) as err:
+        raise HTTPException(422, f"Malformed Sources: {err}") from err
+    request_text = request_text.strip()
+    if not items and not request_text:
+        raise HTTPException(422, "Add a Source or write a Request.")
+    if len(items) > MAX_SOURCES:
+        raise HTTPException(422, f"A Proposal can have at most {MAX_SOURCES} Sources.")
+    if use_reference and not (await _bundle_status(request, bundle)).spec.reference_dir:
         raise HTTPException(422, "Configure a Reference directory for this Bundle first.")
-    if kind == "link" and not url.strip().startswith(("http://", "https://")):
-        raise HTTPException(422, "Enter a link starting with http:// or https://")
-    if kind == "file" and (file is None or not file.filename):
-        raise HTTPException(422, "Choose a file.")
+    if use_reference and not items and not request_text:
+        raise HTTPException(422, "Say which code to document.")
+    uploads = [f for f in files if f.filename]
+    if sum(i.kind == "file" for i in items) != len(uploads):
+        raise HTTPException(422, "Choose a file for every file Source.")
+    seen: set[str] = set()
+    for n, item in enumerate(items, 1):
+        if item.kind == "text" and not item.text.strip():
+            raise HTTPException(422, f"Source {n}: the text is empty.")
+        if item.kind == "link":
+            item.url = item.url.strip()
+            if not item.url.startswith(("http://", "https://")):
+                raise HTTPException(422, f"Source {n}: enter a link starting with http:// or https://")
+            if item.url in seen:
+                raise HTTPException(422, f"Source {n}: this link is already a Source.")
+            seen.add(item.url)
     proposal_id = _new_proposal_id()
 
-    filename = ""
-    if kind == "file":
-        assert file is not None and file.filename
-        filename = Path(file.filename).name
-        if Path(filename).suffix.lower() not in SUPPORTED_EXTS:
-            raise HTTPException(422, f"Unsupported file type. Supported: {', '.join(sorted(SUPPORTED_EXTS))}")
-        await _save_upload(file, settings.uploads_dir / proposal_id / filename,
-                           appconfig.load(settings.config_dir).max_source_mb * 2**20)
+    inputs: list[SourceInput] = []
+    max_bytes = appconfig.load(settings.config_dir).max_source_mb * 2**20
+    pending = iter(uploads)
+    for n, item in enumerate(items, 1):
+        filename = ""
+        if item.kind == "file":
+            file = next(pending)
+            filename = Path(file.filename or "").name
+            if Path(filename).suffix.lower() not in SUPPORTED_EXTS:
+                shutil.rmtree(settings.uploads_dir / proposal_id, ignore_errors=True)
+                raise HTTPException(422, f"Source {n}: unsupported file type. Supported: {', '.join(sorted(SUPPORTED_EXTS))}")
+            try:
+                await _save_upload(file, settings.uploads_dir / proposal_id / str(n) / filename, max_bytes)
+            except HTTPException:
+                shutil.rmtree(settings.uploads_dir / proposal_id, ignore_errors=True)
+                raise
+        inputs.append(SourceInput(kind=item.kind, text=item.text, url=item.url, filename=filename, title=item.title.strip()))
 
-    first_line = text.strip().splitlines()[0][:80] if text.strip() else ""
-    fallback = filename or first_line  # links: the page title, filled in once the page is fetched
+    def fallback_title() -> str:  # links: the page title, filled in once the page is fetched
+        if request_text:
+            return request_text.splitlines()[0][:80]
+        first = inputs[0]
+        return first.title or first.filename or (first.text.strip().splitlines()[0][:80] if first.kind == "text" else "")
+
     inp = ProposalInput(
         proposal_id=proposal_id,
         bundle=bundle,
-        title=title or fallback,
-        source=SourceInput(kind=kind, text=text, url=url.strip(), filename=filename),
+        title=title.strip() or fallback_title(),
+        sources=inputs,
+        request=request_text,
+        use_reference=use_reference,
         submitted_by=submitted_by.strip() or "anonymous",
-        targets=[t.strip() for t in targets.splitlines() if t.strip()] if kind == "request" else [],
+        targets=[t.strip() for t in targets.splitlines() if t.strip()] if request_text else [],
     )
     return await _start_proposal(request, inp)
 
@@ -440,7 +485,7 @@ async def _start_proposal(request: Request, inp: ProposalInput) -> ProposalSumma
         inp,
         id=f"proposal-{inp.proposal_id}",
         task_queue=config.TASK_QUEUE,
-        memo={"title": inp.title or inp.source.url or inp.proposal_id, "submitted_by": inp.submitted_by, "kind": inp.source.kind},
+        memo={"title": inp.title or inp.proposal_id, "submitted_by": inp.submitted_by},
         search_attributes=TypedSearchAttributes(
             [SearchAttributePair(search.BUNDLE, inp.bundle), SearchAttributePair(search.PROPOSAL_STATE, "generating")]
         ),
@@ -448,7 +493,7 @@ async def _start_proposal(request: Request, inp: ProposalInput) -> ProposalSumma
     return ProposalSummary(
         id=inp.proposal_id,
         bundle=inp.bundle,
-        title=inp.title or inp.source.url or inp.proposal_id,
+        title=inp.title or inp.proposal_id,
         submitted_by=inp.submitted_by,
         state="generating",
         created_at=_ts(datetime.now(UTC)),
@@ -468,11 +513,14 @@ async def _save_upload(file: UploadFile, dest: Path, max_bytes: int) -> None:
             out.write(chunk)
 
 
-@app.get("/api/proposals/{proposal_id}/source/{name}")
-async def get_source_file(proposal_id: str, name: str, request: Request) -> FileResponse:
-    folder = (_settings(request).sources_dir / proposal_id).resolve()
+@app.get("/api/proposals/{proposal_id}/sources/{source_id}/{name}")
+async def get_source_file(proposal_id: str, source_id: str, name: str, request: Request) -> FileResponse:
+    if source_id != proposal_id and not source_id.startswith(proposal_id + "-"):
+        raise HTTPException(404, "No such Source file.")
+    root = _settings(request).sources_dir.resolve()
+    folder = (root / source_id).resolve()
     target = (folder / name).resolve()
-    if not target.is_relative_to(folder) or not target.is_file():
+    if folder.parent != root or not target.is_relative_to(folder) or not target.is_file():
         raise HTTPException(404, "No such Source file.")
     media = "text/plain; charset=utf-8" if target.suffix in (".md", ".yaml", ".txt", ".html") else None
     return FileResponse(target, media_type=media, content_disposition_type="inline")
@@ -648,7 +696,8 @@ async def start_audit(slug: str, body: AuditBody, request: Request) -> ProposalS
         proposal_id=_new_proposal_id(),
         bundle=slug,
         title="AI audit" + (f": {body.focus.strip()[:60]}" if body.focus.strip() else ""),
-        source=SourceInput(kind="audit", text=text),
+        request=text,
+        audit=True,
         submitted_by=body.requested_by.strip() or "anonymous",
     ))
 

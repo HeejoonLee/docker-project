@@ -1,7 +1,8 @@
 """Turning a submitted Source into a folder the agent can read and Articles can cite.
 
-A prepared Source folder (staged under <data>/sources/<id>/, committed to the Bundle as
-sources/<id>/ when anything from its Proposal is accepted) holds:
+A Proposal's Sources and its Request are each prepared into their own folder, staged under
+<data>/sources/<proposal id>-<n>/ and committed to the Bundle as sources/<proposal id>-<n>/ once an
+accepted Article cites it. (Proposals from before 0.4 used sources/<proposal id>/.) A folder holds:
 
 - the original (`original.<ext>`, `page.html` for links, `request.md` for Requests)
 - `text.md`: extracted text, with `## Page N` / `## Slide N` / `## Sheet: X` markers
@@ -35,6 +36,7 @@ def prepare(source: SourceInput, upload: Path | None, dest: Path, submitted_by: 
     pages: int | None = None
     url = ""
     filename = ""
+    title = title or source.title.strip()
     if source.kind in ("text", "request", "code", "audit"):
         original = "text.md" if source.kind == "text" else "request.md"
         body = source.text.strip()
@@ -45,6 +47,8 @@ def prepare(source: SourceInput, upload: Path | None, dest: Path, submitted_by: 
             (dest / original).write_text(f"> Request by {submitted_by} on {stamp}\n\n{body}\n")
         text = body
         media = "code" if source.kind == "code" else "text"
+        if source.kind == "text" and not title:
+            title = body.splitlines()[0][:80]
     elif source.kind == "file":
         if upload is None or not upload.exists():
             raise SourceError("The uploaded file is missing.")

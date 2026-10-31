@@ -30,12 +30,12 @@ def update(text: str, **fields) -> str:
 SYSTEM_FIELDS = ("status", "sources", "generated", "review")
 
 
-def finalize(content: str, base_content: str | None, generated: dict, source_entry: dict | None = None,
+def finalize(content: str, base_content: str | None, generated: dict, source_entries: list[dict] | None = None,
              code_sources: list[dict] | None = None) -> str:
     """Make an agent-written Article safe to propose.
 
     System fields are removed and rewritten (`status: proposed`, `generated`, `sources` = the
-    previous version's sources plus this Proposal's Source); frontmatter fields
+    previous version's sources plus the cited Sources of this Proposal); frontmatter fields
     present in the base version but dropped by the agent are restored, so unknown fields survive.
     """
     meta, body = split(content)
@@ -44,14 +44,16 @@ def finalize(content: str, base_content: str | None, generated: dict, source_ent
         if key not in meta and key not in SYSTEM_FIELDS:
             meta[key] = value
     meta.pop("code_refs", None)  # agent input; validated citations live in sources
+    meta.pop("source_refs", None)
     for key in SYSTEM_FIELDS:
         meta.pop(key, None)
     sources = list(base_meta.get("sources") or [])
     if code_sources is not None:
         sources = [s for s in sources if not (isinstance(s, dict) and s.get("kind") == "code")]
         sources.extend(code_sources)
-    if source_entry and not any(isinstance(s, dict) and s.get("id") == source_entry["id"] for s in sources):
-        sources.append(source_entry)
+    for entry in source_entries or []:
+        if not any(isinstance(s, dict) and s.get("id") == entry["id"] for s in sources):
+            sources.append(entry)
     if sources:
         meta["sources"] = sources
     meta["status"] = "proposed"

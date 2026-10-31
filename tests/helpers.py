@@ -15,12 +15,14 @@ async def start_bundle(env, slug):
     return handle
 
 
-async def start_proposal(env, bundle, pid, title="Boot sequence", text="Board boots from LU 1.", source=None, targets=()):
+async def start_proposal(env, bundle, pid, title="Boot sequence", text="Board boots from LU 1.", sources=None,
+                         request="", targets=()):
     inp = ProposalInput(
         proposal_id=pid,
         bundle=bundle,
         title=title,
-        source=source or SourceInput(kind="text", text=text),
+        sources=[SourceInput(kind="text", text=text)] if sources is None else sources,
+        request=request,
         submitted_by="kim",
         targets=list(targets),
     )
