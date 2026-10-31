@@ -21,8 +21,8 @@ A single OKF v0.2 Markdown file in a Bundle, with frontmatter and body.
 _Avoid_: Knowledge document, knowledge unit, page
 
 **Source**:
-Anything ingested as evidence for Articles: a link, a PDF, an image of a handwritten note. Its original and extracted text are kept so that Articles can cite it.
-_Avoid_: Input, upload, reference document
+One item ingested as evidence for Articles: a link, a file (a PDF, an image of a handwritten note…) or a pasted text. Its original and extracted text are kept so that Articles can cite it. A Proposal may bring any number of Sources, of any mix of kinds.
+_Avoid_: Input, upload, reference document, attachment
 
 **Reference directory**:
 A persistent, read-only source-code directory associated with a Bundle that the proposing agent can consult when working on its Articles or when starting a Proposal from code. Its code stays outside the Bundle.
@@ -35,12 +35,12 @@ _Avoid_: Source archive
 ## Review
 
 **Proposal**:
-A changeset against one Bundle, started from a Source, a Request, or a Maintenance check, and awaiting human review. It never changes the knowledge base by itself.
+A changeset against one Bundle, awaiting human review. A Reviewer starts one from any combination of Sources, a Request and the Bundle's Reference directory; a Maintenance check or an AI audit can also start one. Its Sources are fixed once it starts. It never changes the knowledge base by itself.
 _Avoid_: Draft, suggestion, PR
 
 **Request**:
-A Reviewer's typed instruction to change knowledge without a new Source. It is kept as an attributed statement that Articles can cite.
-_Avoid_: Prompt, ticket
+A Reviewer's typed instruction for a Proposal, optionally aimed at specific Articles. It may stand alone or accompany Sources and the Reference directory. It is always kept as an attributed statement in the knowledge base's history; Articles cite it only when they rely on it.
+_Avoid_: Prompt, ticket, instruction
 
 **Stale**:
 The state of an Article change whose underlying Article has changed, or of a Proposal whose cited code files have changed, since the change was produced. A stale code reference must be explicitly refreshed before its Proposal can be accepted or revised.
