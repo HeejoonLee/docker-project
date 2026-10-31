@@ -21,6 +21,8 @@
   --accent-text: #fffefa;
   --highlight: var(--brand-rust);
   --highlight-soft: #f5e9df;
+  --person: #4a6a86;
+  --person-bg: #e4ecf2;
   --ok: #4d693e;
   --ok-bg: #edf2e5;
   --warn: #896025;
@@ -71,6 +73,8 @@
     --accent-text: #242424;
     --highlight: #e3a187;
     --highlight-soft: #403128;
+    --person: #a3bfd8;
+    --person-bg: #26313b;
     --ok: #b6cc9c;
     --ok-bg: #2c3b29;
     --warn: #e2bf82;
@@ -409,7 +413,7 @@ table.diff-split td.add mark { background: var(--add-mark); color: inherit; bord
 .hiw-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 0; padding: 0; font-size: 0.8rem; color: var(--muted); }
 .hiw-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .hiw-swatch { width: 14px; height: 10px; border-radius: 3px; border: 1.5px solid; }
-.hiw-swatch.reviewer { background: var(--highlight-soft); border-color: var(--highlight); }
+.hiw-swatch.reviewer { background: var(--person-bg); border-color: var(--person); }
 .hiw-swatch.ai { background: var(--warn-bg); border-color: var(--warn); }
 .hiw-swatch.git { background: var(--surface); border-color: var(--accent); border-width: 2px; }
 .hiw-swatch.system { background: var(--surface-2); border-color: var(--border-strong); }

@@ -116,7 +116,7 @@ export default function Welcome() {
       <header className="welcome-header">
         <Link to="/" className="welcome-brand" aria-label="Stonepedia"><Mark /><span>Stonepedia<span className="welcome-brand-dot">.</span></span></Link>
         <nav aria-label={t('nav.home')}>
-          <a href="#how-it-works">{t('welcome.how')}</a>
+          <Link to="/how-it-works">{t('welcome.how')}</Link>
           <a href="#built-to-last">{t('welcome.why')}</a>
         </nav>
         <div className="welcome-header-actions">
@@ -134,7 +134,7 @@ export default function Welcome() {
             <p className="welcome-intro">{t('welcome.intro')}</p>
             <div className="welcome-hero-actions">
               <Link to="/bundles" className="welcome-button">{t(name ? 'welcome.bundles' : 'welcome.start')}<Arrow /></Link>
-              <a href="#how-it-works" className="welcome-text-link">{t('welcome.seeHow')}<span aria-hidden="true">↓</span></a>
+              <Link to="/how-it-works" className="welcome-text-link">{t('welcome.seeHow')}<Arrow /></Link>
             </div>
           </div>
           <div className="welcome-art" role="img" aria-label={t('welcome.artAlt')}>
@@ -150,7 +150,7 @@ export default function Welcome() {
         </div>
 
         <section id="how-it-works" className="welcome-process" aria-labelledby="process-title">
-          <div className="welcome-section-heading" data-reveal><h2 id="process-title">{t('welcome.processTitle')}<br /><em>{t('welcome.processAccent')}</em></h2><p>{t('welcome.processIntro')}<br /><Link to="/how-it-works" className="welcome-text-link">{t('welcome.allWorkflows')}<Arrow /></Link></p></div>
+          <div className="welcome-section-heading" data-reveal><h2 id="process-title">{t('welcome.processTitle')}<br /><em>{t('welcome.processAccent')}</em></h2><p>{t('welcome.processIntro')}</p></div>
           <div className="welcome-process-layout" data-reveal>
             <div className="welcome-steps" aria-label={t('welcome.how')}>
               {STEPS.map((key, i) => (

@@ -4,14 +4,14 @@ import { useI18n } from './i18n'
 /** The app's colors, read from the CSS variables so charts follow light and dark mode. */
 export type Palette = Record<
   'surface' | 'surface2' | 'text' | 'text2' | 'muted' | 'border' | 'borderStrong' | 'accent' | 'accentText'
-  | 'highlight' | 'highlightSoft' | 'ok' | 'okBg' | 'warn' | 'warnBg' | 'bad' | 'badBg',
+  | 'person' | 'personBg' | 'ok' | 'okBg' | 'warn' | 'warnBg' | 'bad' | 'badBg',
   string
 >
 
 const VARS: Record<keyof Palette, string> = {
   surface: '--surface', surface2: '--surface-2', text: '--text', text2: '--text-2', muted: '--muted',
   border: '--border', borderStrong: '--border-strong', accent: '--accent', accentText: '--accent-text',
-  highlight: '--highlight', highlightSoft: '--highlight-soft', ok: '--ok', okBg: '--ok-bg',
+  person: '--person', personBg: '--person-bg', ok: '--ok', okBg: '--ok-bg',
   warn: '--warn', warnBg: '--warn-bg', bad: '--bad', badBg: '--bad-bg',
 }
 

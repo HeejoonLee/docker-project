@@ -427,6 +427,5 @@
   "hiw.a.ask": "Ask the agent to reply OK\nup to 3 minutes",
   "hiw.a.works": "Works\nshows the time taken",
   "hiw.a.noReply": "error or wrong reply",
-  "hiw.a.broken": "Shows the error",
-  "welcome.allWorkflows": "See every workflow"
+  "hiw.a.broken": "Shows the error"
 }

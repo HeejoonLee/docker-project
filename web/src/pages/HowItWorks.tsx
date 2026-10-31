@@ -22,7 +22,7 @@ function classDefs(p: Palette): string {
   const def = (kind: Kind, fill: string, stroke: string, color: string, extra = '') =>
     `  classDef ${kind} fill:${fill},stroke:${stroke},color:${color},stroke-width:1.5px${extra}`
   return [
-    def('reviewer', p.highlightSoft, p.highlight, p.text),
+    def('reviewer', p.personBg, p.person, p.text),
     def('ai', p.warnBg, p.warn, p.text),
     def('git', p.surface, p.accent, p.text, ',stroke-width:2px'),
     def('system', p.surface2, p.borderStrong, p.text),

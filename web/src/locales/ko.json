@@ -427,6 +427,5 @@
   "hiw.a.ask": "에이전트에게 OK 답장 요청\n최대 3분",
   "hiw.a.works": "정상\n걸린 시간 표시",
   "hiw.a.noReply": "오류 또는 잘못된 답",
-  "hiw.a.broken": "오류 표시",
-  "welcome.allWorkflows": "모든 워크플로 보기"
+  "hiw.a.broken": "오류 표시"
 }
