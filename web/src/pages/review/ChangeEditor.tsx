@@ -11,7 +11,7 @@ type Tab = 'preview' | 'diff' | 'source'
 const CodeEditor = lazy(() => import('../../CodeEditor'))
 
 /** The editor area for one Article change: its header with the decisions, then Preview / Changes / Markdown. */
-export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource }: {
+export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource, cites, onOpenSource }: {
   change: ArticleChange
   reviewable: boolean
   diffMode: DiffMode
@@ -25,6 +25,9 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
   hasSource: boolean
   sourceOpen: boolean
   onToggleSource: () => void
+  /** The Proposal's Sources this Article cites, labelled as in the Source pane. */
+  cites: { id: string; label: string; title: string }[]
+  onOpenSource: (id: string) => void
 }) {
   const { t } = useI18n()
   const [tab, setTab] = useState<Tab>(change.kind === 'create' ? 'preview' : 'diff')
@@ -110,6 +113,14 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
             </nav>
             <div className="actions">
               {tab === 'diff' && <DiffModeToggle mode={diffMode} onChange={onDiffMode} />}
+              {cites.length > 0 && (
+                <span className="cites">
+                  {t('proposal.cites')}
+                  {cites.map((c) => (
+                    <button key={c.id} className="small-button" title={c.title} onClick={() => onOpenSource(c.id)}>{c.label}</button>
+                  ))}
+                </span>
+              )}
               {hasSource && (
                 <button className={`toggle${sourceOpen ? ' active' : ''}`} aria-pressed={sourceOpen} onClick={onToggleSource}>
                   {sourceOpen ? t('review.hideSource') : t('review.sourceBeside')}

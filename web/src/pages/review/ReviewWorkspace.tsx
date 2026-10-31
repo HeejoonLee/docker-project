@@ -12,6 +12,7 @@ import { Splitter, useStored } from './layout'
 import { displayOrder } from './order'
 import { ProposalList, type ProposalFilter } from './ProposalList'
 import { SourcePane } from './SourcePane'
+import { citedIds, itemLabel, proposalItems } from './sources'
 import './review.css'
 
 const BUSY = new Set(['generating', 'committing'])
@@ -45,6 +46,7 @@ export default function ReviewWorkspace() {
   const [aiOpen, setAiOpen] = useState(() => window.innerWidth >= 1600)
   const [sourceOpen, setSourceOpen] = useStored('review.sourceOpen', false)
   const [sourceWidth, setSourceWidth] = useStored('review.sourceWidth', 480)
+  const [sourceTab, setSourceTab] = useState<string | null>(null) // falls back to the first Source
   const [diffMode, setDiffMode] = useStored<DiffMode>('review.diffMode', 'split')
   const [compare, setCompare] = useState<{ change: string; index: number } | null>(null)
   // Errors are tagged with their Proposal so they disappear when another one is opened.
@@ -57,6 +59,7 @@ export default function ReviewWorkspace() {
 
   const changeParam = params.get('change')
   const ordered = p ? displayOrder(p.changes) : []
+  const items = p ? proposalItems(p) : []
   const current = p && (ordered.find((c) => c.id === changeParam) ?? ordered.find((c) => c.decision === 'pending') ?? ordered[0])
   const reviewable = p?.state === 'awaiting_review'
 
@@ -155,9 +158,14 @@ export default function ReviewWorkspace() {
                       onDecide={(d) => decide(current, d)}
                       onRevise={openRevise}
                       onEdit={async (content) => !!(await act(() => api.edit(p.id, current.id, content, name)))}
-                      hasSource={!!p.source}
+                      hasSource={items.length > 0}
                       sourceOpen={sourceOpen}
                       onToggleSource={() => setSourceOpen(!sourceOpen)}
+                      cites={citedIds(current.content, items).map((sid) => {
+                        const item = items.find((i) => i.id === sid)!
+                        return { id: sid, label: itemLabel(p, item, (k) => t(`proposal.sourceKind.${k}`)), title: item.title }
+                      })}
+                      onOpenSource={(sid) => { setSourceTab(sid); setSourceOpen(true) }}
                     />
                   ) : (
                     <div className="editor-empty">
@@ -165,11 +173,11 @@ export default function ReviewWorkspace() {
                     </div>
                   )}
                 </div>
-                {sourceOpen && p.source && (
+                {sourceOpen && items.length > 0 && (
                   <>
                     <Splitter axis="x" value={sourceWidth} onChange={setSourceWidth} min={260} max={1200} invert />
                     <div className="source-wrap" style={{ width: sourceWidth }}>
-                      <SourcePane p={p} onClose={() => setSourceOpen(false)} />
+                      <SourcePane p={p} selected={sourceTab} onSelect={setSourceTab} onClose={() => setSourceOpen(false)} />
                     </div>
                   </>
                 )}

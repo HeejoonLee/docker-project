@@ -31,13 +31,23 @@ export interface SourceInfo {
   preview: string
 }
 
+/** One Source as the New Proposal form sends it. */
+export type NewSource =
+  | { kind: 'text'; text: string; title?: string }
+  | { kind: 'link'; url: string; title?: string }
+  | { kind: 'file'; file: File; title?: string }
+
+export const MAX_SOURCES = 20
+
 export interface Proposal {
   id: string
   bundle: string
   title: string
   submitted_by: string
-  source_kind: SourceKind
-  source: SourceInfo | null
+  sources: SourceInfo[]
+  request: SourceInfo | null // the Request, or the AI audit instructions (kind 'audit')
+  request_text: string
+  use_reference: boolean
   targets: string[]
   state: ProposalState
   changes: ArticleChange[]
@@ -169,18 +179,23 @@ export const api = {
   },
   proposal: (id: string) => request<Proposal>('GET', `/api/proposals/${id}`),
   createProposal: (p: {
-    bundle: string; kind: SourceKind; title: string; submitted_by: string
-    text?: string; url?: string; file?: File; targets?: string[]
+    bundle: string; title: string; submitted_by: string
+    sources: NewSource[]; request: string; targets: string[]; use_reference: boolean
   }) => {
     const form = new FormData()
-    for (const [k, v] of Object.entries(p)) {
-      if (v === undefined) continue
-      if (k === 'targets') form.append(k, (v as string[]).join('\n'))
-      else form.append(k, v as string | File)
-    }
+    form.append('bundle', p.bundle)
+    form.append('title', p.title)
+    form.append('submitted_by', p.submitted_by)
+    form.append('request', p.request)
+    form.append('targets', p.targets.join('\n'))
+    form.append('use_reference', String(p.use_reference))
+    form.append('sources', JSON.stringify(p.sources.map((s) =>
+      s.kind === 'file' ? { kind: 'file', title: s.title ?? '' } : s)))
+    for (const s of p.sources) if (s.kind === 'file') form.append('files', s.file)
     return request<ProposalSummary>('POST', '/api/proposals', form)
   },
-  sourceUrl: (id: string, name: string) => `/api/proposals/${id}/source/${encodeURIComponent(name)}`,
+  sourceUrl: (id: string, sourceId: string, name: string) =>
+    `/api/proposals/${id}/sources/${sourceId}/${encodeURIComponent(name)}`,
   decide: (id: string, changeId: string, decision: Decision) =>
     request<Proposal>('POST', `/api/proposals/${id}/changes/${changeId}/decision`, { decision }),
   revise: (id: string, changeId: string, feedback: string, reviewer: string) =>
