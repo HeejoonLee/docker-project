@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '../i18n'
 import { frontMatter, MermaidChart, usePalette, type Palette } from '../MermaidChart'
 
@@ -148,6 +148,8 @@ function Legend({ kinds }: { kinds: Kind[] }) {
 export default function HowItWorks() {
   const { t } = useI18n()
   const palette = usePalette()
+  const [params, setParams] = useSearchParams()
+  const chart = CHARTS.find((c) => c.key === params.get('tab')) ?? CHARTS[0]
   return (
     <section className="hiw">
       <div className="page-head">
@@ -156,29 +158,30 @@ export default function HowItWorks() {
           <p className="muted">{t('hiw.intro')}</p>
         </div>
       </div>
-      <nav className="hiw-toc" aria-label={t('hiw.toc')}>
-        {CHARTS.map((c) => <a key={c.key} href={`#hiw-${c.key}`}>{t(`hiw.${c.key}.title`)}</a>)}
+      <nav className="tabs page-tabs" aria-label={t('hiw.toc')}>
+        {CHARTS.map((c) => (
+          <button key={c.key} className={c.key === chart.key ? 'active' : ''} aria-pressed={c.key === chart.key} onClick={() => setParams({ tab: c.key })}>
+            {t(`hiw.${c.key}.title`)}
+          </button>
+        ))}
       </nav>
-      {CHARTS.map((chart) => (
-        <article key={chart.key} id={`hiw-${chart.key}`} className="hiw-section">
-          <header>
-            <h2>{t(`hiw.${chart.key}.title`)}</h2>
-            {chart.workflow && <code className="hiw-workflow">{chart.workflow}</code>}
-          </header>
-          <p className="hiw-summary">{t(`hiw.${chart.key}.summary`)}</p>
-          {chart.key === 'proposal' && (
-            <p className="hiw-states small muted">
-              {t('hiw.states')}{' '}
-              {STATES.map((s) => <span key={s} className={`badge state-${s}`}>{t(`state.${s}`)}</span>)}
-            </p>
-          )}
-          <div className="card hiw-card">
-            <Legend kinds={chart.kinds} />
-            <MermaidChart code={`${frontMatter(palette)}\n${chart.build(t)}\n${classDefs(palette)}`} label={t(`hiw.${chart.key}.title`)} />
-          </div>
-          {chart.key === 'overview' && <p className="small muted">{t('hiw.overview.more')} <Link to="/new">{t('hiw.overview.try')}</Link></p>}
-        </article>
-      ))}
+      <article key={chart.key}>
+        <p className="hiw-summary">
+          {chart.workflow && <code className="hiw-workflow">{chart.workflow}</code>}
+          {t(`hiw.${chart.key}.summary`)}
+        </p>
+        {chart.key === 'proposal' && (
+          <p className="hiw-states small muted">
+            {t('hiw.states')}{' '}
+            {STATES.map((s) => <span key={s} className={`badge state-${s}`}>{t(`state.${s}`)}</span>)}
+          </p>
+        )}
+        <div className="card hiw-card">
+          <Legend kinds={chart.kinds} />
+          <MermaidChart code={`${frontMatter(palette)}\n${chart.build(t)}\n${classDefs(palette)}`} label={t(`hiw.${chart.key}.title`)} />
+        </div>
+        {chart.key === 'overview' && <p className="small muted">{t('hiw.overview.more')} <Link to="/new">{t('hiw.overview.try')}</Link></p>}
+      </article>
     </section>
   )
 }

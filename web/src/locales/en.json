@@ -345,7 +345,7 @@
   "hiw.kind.dashed": "Dashed: failure or loop back",
   "hiw.overview.title": "The big picture",
   "hiw.overview.summary": "Four workflows work together. Proposals carry changes, the Bundle is the only one that writes to git, and Maintenance checks keep the knowledge base healthy. Nothing reaches the knowledge base without a Reviewer's decision.",
-  "hiw.overview.more": "The charts below show each workflow step by step.",
+  "hiw.overview.more": "Each tab shows one workflow step by step.",
   "hiw.overview.try": "Start a Proposal →",
   "hiw.o.reviewer": "Reviewer",
   "hiw.o.schedule": "Schedule",
