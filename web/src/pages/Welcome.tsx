@@ -150,7 +150,7 @@ export default function Welcome() {
         </div>
 
         <section id="how-it-works" className="welcome-process" aria-labelledby="process-title">
-          <div className="welcome-section-heading" data-reveal><h2 id="process-title">{t('welcome.processTitle')}<br /><em>{t('welcome.processAccent')}</em></h2><p>{t('welcome.processIntro')}</p></div>
+          <div className="welcome-section-heading" data-reveal><h2 id="process-title">{t('welcome.processTitle')}<br /><em>{t('welcome.processAccent')}</em></h2><p>{t('welcome.processIntro')}<br /><Link to="/how-it-works" className="welcome-text-link">{t('welcome.allWorkflows')}<Arrow /></Link></p></div>
           <div className="welcome-process-layout" data-reveal>
             <div className="welcome-steps" aria-label={t('welcome.how')}>
               {STEPS.map((key, i) => (

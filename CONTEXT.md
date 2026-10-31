@@ -78,5 +78,9 @@ _Avoid_: User, approver
 ## Maintenance
 
 **Maintenance check**:
-A scheduled inspection of the knowledge base (integrity, Source refresh, or AI audit) whose output is a report or a Proposal, never a direct change.
+A scheduled or on-demand inspection of one Bundle (integrity or Source refresh) whose output is a report or Proposals, never a direct change.
 _Avoid_: Cron job, lint
+
+**AI audit**:
+A Reviewer-started Proposal in which the AI reviews a Bundle's Articles for problems, optionally with a focus. It is not a Maintenance check and cannot be scheduled.
+_Avoid_: Maintenance audit

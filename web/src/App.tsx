@@ -4,6 +4,7 @@ import { useConfig } from './config'
 import { BrandMark } from './BrandMark'
 import { LOCALES, useI18n } from './i18n'
 import BundlePage from './pages/BundlePage'
+import HowItWorks from './pages/HowItWorks'
 import Bundles from './pages/Bundles'
 import MaintenancePage from './pages/MaintenancePage'
 import NewProposal from './pages/NewProposal'
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/bundles/:slug" element={<BundlePage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
         </Route>
       </Routes>
     </BrowserRouter>
@@ -65,6 +67,7 @@ function Header() {
         <NavLink to="/bundles">{t('nav.bundles')}</NavLink>
         <NavLink to="/maintenance">{t('nav.maintenance')}</NavLink>
         <NavLink to="/settings">{t('nav.settings')}</NavLink>
+        <NavLink to="/how-it-works">{t('nav.how')}</NavLink>
       </nav>
       <div className="topbar-right">
         {config && <a className="ghost" href={config.temporal_ui_url} target="_blank" rel="noreferrer">{t('nav.temporal')} ↗</a>}
