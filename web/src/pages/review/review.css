@@ -189,12 +189,11 @@ button.toggle.active { background: var(--accent-soft); border-color: var(--borde
 .ai-wrap { flex-shrink: 0; min-width: 0; display: flex; flex-direction: column; background: var(--surface-2); }
 .ai-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ai-scroll { flex: 1; min-height: 0; overflow: auto; }
+.ai-scope { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-2); font-size: 0.8rem; line-height: 1.45; }
 .ai-section { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 18px; }
 .ai-section + .ai-section { border-top: 1px solid var(--border); }
-.ai-section h3 { margin: 0; color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .ai-summary > summary { font-size: 0.86rem; font-weight: 600; }
 .ai-summary .prose { margin-top: 8px; font-size: 0.86rem; line-height: 1.6; }
-.ai-change-title { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .ai-compose { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .ai-compose label { display: flex; flex-direction: column; gap: 4px; width: 100%; font-size: 0.86rem; }
 .ai-compose .hint { font-size: 0.78rem; }
@@ -204,13 +203,27 @@ button.toggle.active { background: var(--accent-soft); border-color: var(--borde
 .timeline li { position: relative; }
 .timeline li::before {
   content: ""; position: absolute; left: -21px; top: 5px; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--surface-2); border: 2px solid var(--border-strong);
+  background: var(--surface); border: 2px solid var(--border-strong);
 }
 .timeline li.timeline-current::before { background: var(--highlight); border-color: var(--highlight); }
 .timeline li.active::before { background: var(--accent); border-color: var(--accent); }
 .timeline-what { font-weight: 600; }
 .timeline button.link { text-decoration: underline; text-underline-offset: 2px; color: var(--text-2); }
 .timeline .note { margin: 2px 0; color: var(--text-2); font-style: italic; overflow-wrap: anywhere; }
+
+/* Revise opens under the Article's header, tinted like the header's own decision bar. */
+.revise-box {
+  display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; padding: 12px 16px;
+  border-bottom: 1px solid var(--border); background: var(--highlight-soft); box-shadow: inset 3px 0 var(--highlight);
+}
+.revise-box label { display: flex; flex-direction: column; gap: 4px; font-size: 0.86rem; }
+.revise-box label strong { overflow-wrap: anywhere; }
+.revise-box textarea { width: 100%; max-width: 100ch; resize: vertical; }
+.revise-actions { display: flex; align-items: center; gap: 8px; }
+.revise-actions .hint { margin-right: auto; font-size: 0.78rem; }
+.revise-actions button { height: 30px; padding: 0 12px; font-size: 0.84rem; }
+.history { display: flex; flex-direction: column; gap: 14px; max-width: 70ch; }
+.history > p { margin: 0; }
 
 /* ---------- Status bar ---------- */
 .statusbar {

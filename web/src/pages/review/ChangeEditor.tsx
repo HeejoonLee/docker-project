@@ -3,24 +3,30 @@ import type { ArticleChange, Decision } from '../../api'
 import { DiffView, type DiffMode } from '../../diff'
 import { useI18n } from '../../i18n'
 import { ArticleView } from '../../markdown'
-import { formatTime } from '../../ui'
+import { formatShortTime, formatTime } from '../../ui'
+import { sendKeys } from './sendKeys'
 
-type Tab = 'preview' | 'diff' | 'source'
+type Tab = 'preview' | 'diff' | 'source' | 'history'
 
 // CodeMirror is only needed once someone opens Markdown or Edit, so it loads on demand.
 const CodeEditor = lazy(() => import('../../CodeEditor'))
 
-/** The editor area for one Article change: its header with the decisions, then Preview / Changes / Markdown. */
-export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource, cites, onOpenSource }: {
+/**
+ * The editor area for one Article change: its header with the decisions, then
+ * Preview / Changes / Markdown / History. Revise opens a box for the agent right
+ * under the header, so the request is visibly about this Article and nothing else.
+ */
+export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare, onCompare, onCloseCompare, onDecide, onRevise, onEdit, hasSource, sourceOpen, onToggleSource, cites, onOpenSource }: {
   change: ArticleChange
   reviewable: boolean
   diffMode: DiffMode
   onDiffMode: (mode: DiffMode) => void
   /** Index into change.history to diff against the current version, if any. */
   compare: number | null
+  onCompare: (index: number) => void
   onCloseCompare: () => void
   onDecide: (d: Decision) => void
-  onRevise: () => void
+  onRevise: (text: string) => Promise<boolean>
   onEdit: (content: string) => Promise<boolean>
   hasSource: boolean
   sourceOpen: boolean
@@ -32,6 +38,7 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
   const { t } = useI18n()
   const [tab, setTab] = useState<Tab>(change.kind === 'create' ? 'preview' : 'diff')
   const [editing, setEditing] = useState(false)
+  const [revising, setRevising] = useState(false)
   const [draft, setDraft] = useState(change.content)
   const pending = change.decision === 'pending'
   const canEdit = reviewable && pending
@@ -53,10 +60,10 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
         </div>
         <div className="decide">
           {pending ? (
-            canEdit && !editing && (
+            canEdit && !editing && !revising && (
               <>
                 <button className="primary" disabled={change.stale} onClick={() => onDecide('accepted')}>{t('proposal.accept')}</button>
-                <button onClick={onRevise}>{t('proposal.revise')}</button>
+                <button onClick={() => setRevising(true)}>{t('proposal.revise')}</button>
                 <button onClick={startEdit}>{t('proposal.edit')}</button>
                 <button className="danger" onClick={() => onDecide('discarded')}>{t('proposal.discard')}</button>
               </>
@@ -70,6 +77,9 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
         </div>
       </header>
       {change.stale && <div className="editor-banner bad">{t('proposal.stale')}</div>}
+      {revising && canEdit && (
+        <ReviseBox title={change.title} onRevise={onRevise} onDone={() => setRevising(false)} />
+      )}
 
       {editing && canEdit ? (
         <>
@@ -110,6 +120,11 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
               {(['preview', 'diff', 'source'] as const).map((k) => (
                 <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{t(`proposal.tab.${k}`)}</button>
               ))}
+              {change.history.length > 0 && (
+                <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>
+                  {t('proposal.tab.history', { count: String(change.history.length) })}
+                </button>
+              )}
             </nav>
             <div className="actions">
               {tab === 'diff' && <DiffModeToggle mode={diffMode} onChange={onDiffMode} />}
@@ -131,6 +146,7 @@ export function ChangeEditor({ change, reviewable, diffMode, onDiffMode, compare
           <div className={`editor-body${tab === 'source' ? ' code' : ''}`}>
             {tab === 'preview' && <ArticleView content={change.content} />}
             {tab === 'diff' && <DiffView key={diffMode} before={change.base_content ?? ''} after={change.content} mode={diffMode} />}
+            {tab === 'history' && <History change={change} onCompare={onCompare} />}
             {tab === 'source' && (
               <Suspense fallback={<p className="muted">{t('common.loading')}</p>}>
                 <CodeEditor value={change.content} />
@@ -152,6 +168,63 @@ function DiffModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (mode: D
           {t(`review.diff.${m}`)}
         </button>
       ))}
+    </div>
+  )
+}
+
+/** The request to the agent for a new version of this one Article change. */
+function ReviseBox({ title, onRevise, onDone }: {
+  title: string
+  onRevise: (text: string) => Promise<boolean>
+  onDone: () => void
+}) {
+  const { t } = useI18n()
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const send = async () => {
+    setSending(true)
+    const ok = await onRevise(text)
+    setSending(false)
+    if (ok) onDone()
+  }
+  return (
+    <div className="revise-box">
+      <label>
+        <strong>{t('review.reviseTitle', { title })}</strong>
+        <span className="hint">{t('proposal.reviseHint')}</span>
+        <textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKeys(send, onDone)} />
+      </label>
+      <div className="revise-actions">
+        <span className="hint">{t('review.sendShortcut')}</span>
+        <button onClick={onDone}>{t('common.cancel')}</button>
+        <button className="primary" disabled={sending} onClick={send}>{t('proposal.reviseSend')}</button>
+      </div>
+    </div>
+  )
+}
+
+/** Earlier versions of this Article change, newest first, each comparable with the current one. */
+function History({ change, onCompare }: { change: ArticleChange; onCompare: (index: number) => void }) {
+  const { t } = useI18n()
+  return (
+    <div className="history">
+      <p className="muted small">{t('review.historyCompare')}</p>
+      <ol className="timeline" reversed>
+        <li className="timeline-current">
+          <span className="timeline-what">{t('review.current')}</span>
+          {change.edited_by && <span className="muted small"> · {t('proposal.editedBy', { name: change.edited_by })}</span>}
+        </li>
+        {change.history.map((h, i) => ({ h, i })).reverse().map(({ h, i }) => (
+          <li key={i}>
+            <div>
+              <span className="timeline-what">{t(`proposal.history.${h.replaced_by}`)}</span>
+              <span className="muted small"> · {h.by} · <span title={formatTime(h.at)}>{formatShortTime(h.at)}</span></span>
+            </div>
+            {h.note && <div className="note">“{h.note}”</div>}
+            <button className="link small" onClick={() => onCompare(i)}>{t('review.compare')}</button>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

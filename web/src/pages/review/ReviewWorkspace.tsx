@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link, useMatch, useSearchParams } from 'react-router-dom'
 import type { DiffMode } from '../../diff'
 import { api, type ArticleChange, type Decision, type Proposal } from '../../api'
@@ -20,7 +20,7 @@ const BUSY = new Set(['generating', 'committing'])
 /**
  * The review workspace behind /inbox and /proposals/:id, laid out like an IDE:
  * Proposals and Article changes on the left, the selected Article change in the
- * middle, the agent on the right, and the review status along the bottom.
+ * middle, the agent's view of the whole Proposal on the right, and the review status along the bottom.
  */
 export default function ReviewWorkspace() {
   const { t } = useI18n()
@@ -52,11 +52,6 @@ export default function ReviewWorkspace() {
   // Errors are tagged with their Proposal so they disappear when another one is opened.
   const [failure, setFailure] = useState<{ id: string | undefined; error: unknown }>()
   const actionError = failure?.id === id ? failure?.error : undefined
-  const reviseRef = useRef<HTMLTextAreaElement>(null)
-  const [focusRevise, setFocusRevise] = useState(0)
-
-  useEffect(() => { if (focusRevise) reviseRef.current?.focus() }, [focusRevise])
-
   const changeParam = params.get('change')
   const ordered = p ? displayOrder(p.changes) : []
   const items = p ? proposalItems(p) : []
@@ -94,11 +89,6 @@ export default function ReviewWorkspace() {
     const i = order.findIndex((x) => x.id === c.id)
     const upcoming = [...order.slice(i + 1), ...order.slice(0, i)].find((x) => x.decision === 'pending')
     if (upcoming) select(upcoming.id)
-  }
-
-  const openRevise = () => {
-    setAiOpen(true)
-    setFocusRevise((n) => n + 1)
   }
 
   return (
@@ -154,9 +144,10 @@ export default function ReviewWorkspace() {
                       diffMode={diffMode}
                       onDiffMode={setDiffMode}
                       compare={compare?.change === current.id ? compare.index : null}
+                      onCompare={(index) => setCompare({ change: current.id, index })}
                       onCloseCompare={() => setCompare(null)}
                       onDecide={(d) => decide(current, d)}
-                      onRevise={openRevise}
+                      onRevise={async (text) => !!(await act(() => api.revise(p.id, current.id, text, name)))}
                       onEdit={async (content) => !!(await act(() => api.edit(p.id, current.id, content, name)))}
                       hasSource={items.length > 0}
                       sourceOpen={sourceOpen}
@@ -192,13 +183,8 @@ export default function ReviewWorkspace() {
             <div className="ai-wrap" style={{ width: aiWidth }}>
               <AiPanel
                 p={p}
-                change={current}
                 reviewable={reviewable}
-                compare={compare && compare.change === current?.id ? compare.index : null}
-                onCompare={(index) => current && setCompare({ change: current.id, index })}
                 onFeedback={async (text) => !!(await act(() => api.feedback(p.id, text, name)))}
-                onRevise={async (text) => !!current && !!(await act(() => api.revise(p.id, current.id, text, name)))}
-                reviseRef={reviseRef}
                 onClose={() => setAiOpen(false)}
               />
             </div>

@@ -87,9 +87,9 @@ when available. A code-only Proposal requires a focus instruction.
    PowerPoint, Excel, image of a note...), give a link, write a Request, or
    select **Code reference** and enter a focus instruction.
 2. The agent drafts Article changes (usually under a minute).
-3. Review each change: **Accept**, **Revise** (tell the agent what to change),
-   **Edit** by hand, or **Discard**. Feedback on the whole Proposal goes in the box
-   at the bottom.
+3. Review each change: **Accept**, **Revise** (tell the agent what to change in
+   that Article), **Edit** by hand, or **Discard**. Feedback on the whole Proposal
+   goes in the AI panel on the right.
 4. **Submit review**. Accepted changes become one git commit, pushed to the Bundle's remote.
 
 ## Upgrade

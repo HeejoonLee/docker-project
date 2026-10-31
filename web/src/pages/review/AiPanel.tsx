@@ -1,27 +1,25 @@
-import { useState, type RefObject } from 'react'
-import type { ArticleChange, Proposal } from '../../api'
+import { useState } from 'react'
+import type { Proposal } from '../../api'
 import { useI18n } from '../../i18n'
 import { Markdown } from '../../markdown'
-import { formatShortTime, formatTime } from '../../ui'
+import { sendKeys } from './sendKeys'
 
 /**
- * Everything addressed to the agent. The Proposal section reaches every undecided
- * Article change; the Article change section reaches only the selected one.
+ * The agent's side of the whole Proposal: its notes and Proposal feedback.
+ * Anything about one Article change (Revise, its history) lives with that change in the editor.
  */
-export function AiPanel({ p, change, reviewable, compare, onCompare, onFeedback, onRevise, reviseRef, onClose }: {
+export function AiPanel({ p, reviewable, onFeedback, onClose }: {
   p: Proposal
-  change: ArticleChange | undefined
   reviewable: boolean
-  compare: number | null
-  onCompare: (index: number) => void
   onFeedback: (text: string) => Promise<boolean>
-  onRevise: (text: string) => Promise<boolean>
-  reviseRef: RefObject<HTMLTextAreaElement | null>
   onClose: () => void
 }) {
   const { t } = useI18n()
   const [feedback, setFeedback] = useState('')
-  const canRevise = reviewable && change?.decision === 'pending'
+  const undecided = p.changes.filter((c) => c.decision === 'pending').length
+  const send = async () => {
+    if (feedback.trim() && await onFeedback(feedback)) setFeedback('')
+  }
 
   return (
     <aside className="ai-panel">
@@ -30,8 +28,8 @@ export function AiPanel({ p, change, reviewable, compare, onCompare, onFeedback,
         <button className="icon-button" onClick={onClose} title={t('review.aiClose')}>»</button>
       </div>
       <div className="ai-scroll">
+        <p className="ai-scope">{t('review.aiScope')}</p>
         <section className="ai-section">
-          <h3>{t('review.proposalSection')}</h3>
           {p.summary ? (
             <details className="ai-summary" open>
               <summary>{t('proposal.summary')}</summary>
@@ -40,66 +38,23 @@ export function AiPanel({ p, change, reviewable, compare, onCompare, onFeedback,
           ) : (
             <p className="muted small">{t('review.noSummary')}</p>
           )}
-          {reviewable && (
+        </section>
+        {reviewable && (
+          <section className="ai-section">
             <div className="ai-compose">
               <label>
                 <strong>{t('proposal.feedbackTitle')}</strong>
-                <span className="hint">{t('proposal.feedbackHint')}</span>
-                <textarea rows={3} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+                <span className="hint">
+                  {undecided > 0 ? t('review.feedbackReach', { count: String(undecided) }) : t('review.feedbackNothing')}
+                  {' '}{t('proposal.feedbackHint')}
+                </span>
+                <textarea rows={4} value={feedback} onChange={(e) => setFeedback(e.target.value)} onKeyDown={sendKeys(send)} />
               </label>
-              <button disabled={!feedback.trim()} onClick={async () => { if (await onFeedback(feedback)) setFeedback('') }}>
-                {t('proposal.feedbackSend')}
-              </button>
+              <button disabled={!feedback.trim()} onClick={send}>{t('proposal.feedbackSend')}</button>
             </div>
-          )}
-        </section>
-
-        {change && (
-          <section className="ai-section">
-            <h3>{t('review.changeSection')}</h3>
-            <p className="ai-change-title" title={change.path}>{change.title}</p>
-            <ol className="timeline" reversed>
-              <li className="timeline-current">
-                <span className="timeline-what">{t('review.current')}</span>
-                {change.edited_by && <span className="muted small"> · {t('proposal.editedBy', { name: change.edited_by })}</span>}
-              </li>
-              {change.history.map((h, i) => ({ h, i })).reverse().map(({ h, i }) => (
-                <li key={i} className={compare === i ? 'active' : ''}>
-                  <div>
-                    <span className="timeline-what">{t(`proposal.history.${h.replaced_by}`)}</span>
-                    <span className="muted small"> · {h.by} · <span title={formatTime(h.at)}>{formatShortTime(h.at)}</span></span>
-                  </div>
-                  {h.note && <div className="note">“{h.note}”</div>}
-                  <button className="link small" onClick={() => onCompare(i)}>{t('review.compare')}</button>
-                </li>
-              ))}
-            </ol>
-            {canRevise ? (
-              <ReviseBox key={change.id} onRevise={onRevise} reviseRef={reviseRef} />
-            ) : reviewable && (
-              <p className="muted small">{t('review.reviseDecided')}</p>
-            )}
           </section>
         )}
       </div>
     </aside>
-  )
-}
-
-function ReviseBox({ onRevise, reviseRef }: {
-  onRevise: (text: string) => Promise<boolean>
-  reviseRef: RefObject<HTMLTextAreaElement | null>
-}) {
-  const { t } = useI18n()
-  const [text, setText] = useState('')
-  return (
-    <div className="ai-compose">
-      <label>
-        <strong>{t('proposal.revise')}</strong>
-        <span className="hint">{t('proposal.reviseHint')}</span>
-        <textarea ref={reviseRef} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-      </label>
-      <button onClick={async () => { if (await onRevise(text)) setText('') }}>{t('proposal.reviseSend')}</button>
-    </div>
   )
 }
